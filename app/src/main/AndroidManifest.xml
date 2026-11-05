@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:name=".platform.SpatialApplication"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SeedPits"
+        tools:targetApi="31">
+
+        <activity
+            android:name=".platform.LaunchActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SeedPits">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- The board volume (design package container.volume): 0.72 x 0.28 x 0.32 m, fixed world scale,
+                 gravity aligned, no material background, no caption bar, uniform resize (Chess / Xiangqi values). -->
+            <meta-data android:name="pico.spatial.windowcontainer.id" android:value="SeedBoard" />
+            <meta-data android:name="pico.spatial.windowcontainer.style" android:value="2" />
+            <meta-data android:name="pico.spatial.windowcontainer.defaultsize" android:value="0.72x0.28x0.32" />
+            <meta-data android:name="pico.spatial.windowcontainer.defaultsize.unit" android:value="meters" />
+            <meta-data android:name="pico.spatial.windowcontainer.resizetype" android:value="0" />
+            <meta-data android:name="pico.spatial.windowcontainer.resizerestriction" android:value="1" />
+            <meta-data android:name="pico.spatial.windowcontainer.worldscaletype" android:value="2" />
+            <meta-data android:name="pico.spatial.windowcontainer.captionbar" android:value="0" />
+            <meta-data android:name="pico.spatial.windowcontainer.materialbackground" android:value="0" />
+            <meta-data android:name="pico.spatial.windowcontainer.volumealignment" android:value="0" />
+            <meta-data android:name="pico.spatial.windowcontainer.volumebasepanel" android:value="0" />
+        </activity>
+
+        <meta-data android:name="icon.3d.list" android:resource="@array/icon_3d_list" />
+        <meta-data android:name="icon.sdf.list" android:resource="@array/icon_sdf_list" />
+    </application>
+
+</manifest>

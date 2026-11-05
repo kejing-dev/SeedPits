@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver android:name=".platform.DebugCommandReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="io.embodit.seedpits.DEBUG" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
