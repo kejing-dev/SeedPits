@@ -115,15 +115,15 @@
     <string name="set_digits_hint">板上每个坑旁边的小数字牌</string>
     <string name="set_tilt">倾角</string>
     <string name="set_recall">叫回面前</string>
-    <string name="set_recall_hint">先平视前方，面板会在你正前方重新打开。</string>
+    <string name="set_recall_hint">面板关掉再开，回到棋盘旁边。棋盘本身用板下面的系统把手拖。</string>
     <string name="set_about">关于 · v%s</string>
-    <string name="about_body">全离线。字体 Noto Sans（OFL），图标 Material Symbols（Apache-2.0）。</string>
+    <string name="about_body">全离线，字体 Noto Sans（OFL），图标 Material Symbols（Apache-2.0）</string>
     <string name="set_exit">退出应用</string>
     <string name="exit_title">退出播棋？</string>
     <string name="exit_body">这盘已经存好了，下次打开接着下。</string>
     <string name="exit_yes">退出</string>
 
-    <string name="plate_you">你 · 轮到</string>
+    <string name="plate_you">轮到你</string>
     <string name="plate_you_again">你 · 再来一轮</string>
     <string name="plate_ai_turn">%s · 在想</string>
     <string name="plate_ai_again">%s · 再来一轮</string>
@@ -135,4 +135,5 @@
     <string name="plate_welcome">先看看规则</string>
     <string name="plate_open">点这里打开面板</string>
     <string name="plate_level">平视前方，面板就出来</string>
+    <string name="set_sound_volume">音效 · 音量</string>
 </resources>

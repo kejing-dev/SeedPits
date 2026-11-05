@@ -203,16 +203,16 @@ internal fun SettingsPage(state: GameState, settings: Settings, graph: SeedGraph
                 }
             }
         }
-        SettingRow(stringResource(R.string.set_sound), "sound") {
+        // Sound on / off and the three-stop volume share one row (the page fits the 640 dp window without scrolling).
+        SettingRow(stringResource(R.string.set_sound_volume), "sound") {
+            SegmentSlider(settings.volume.ordinal, Volume.entries.size - 1, { v -> update { it.copy(volume = Volume.entries[v.coerceIn(0, Volume.entries.size - 1)]) } }, Modifier.width(200.dp), enabled = settings.sound)
+            HGap(12.dp)
             Switch(checked = settings.sound, onCheckedChange = { on -> update { it.copy(sound = on) } })
         }
-        SettingRow(stringResource(R.string.set_volume), "volume") {
-            SegmentSlider(settings.volume.ordinal, Volume.entries.size - 1, { v -> update { it.copy(volume = Volume.entries[v.coerceIn(0, Volume.entries.size - 1)]) } }, Modifier.width(220.dp))
-        }
-        SettingRow(stringResource(R.string.set_reduced), "reduced", hint = stringResource(R.string.set_reduced_hint)) {
+        SettingRow(stringResource(R.string.set_reduced), "reduced") {
             Switch(checked = settings.reducedMotion, onCheckedChange = { on -> update { it.copy(reducedMotion = on) } })
         }
-        SettingRow(stringResource(R.string.set_digits), "digits", hint = stringResource(R.string.set_digits_hint)) {
+        SettingRow(stringResource(R.string.set_digits), "digits") {
             Switch(checked = settings.showDigits, onCheckedChange = { on -> update { it.copy(showDigits = on) } })
         }
         SettingRow(stringResource(R.string.set_tilt), "tilt") {
@@ -230,7 +230,7 @@ internal fun SettingsPage(state: GameState, settings: Settings, graph: SeedGraph
         SettingRow(stringResource(R.string.set_recall), "recall", hint = stringResource(R.string.set_recall_hint)) {
             SecondaryButton(stringResource(R.string.set_recall), "recall", { WindowCtl.recall() }, minWidth = 120.dp)
         }
-        SettingRow(stringResource(R.string.set_about, VERSION), "about", hint = stringResource(R.string.about_body)) {}
+        SettingRow(stringResource(R.string.set_about, VERSION) + " · " + stringResource(R.string.about_body), "about") {}
         Gap(6.dp)
         if (state.confirm == Confirm.EXIT) {
             ConfirmBar(
@@ -245,10 +245,10 @@ internal fun SettingsPage(state: GameState, settings: Settings, graph: SeedGraph
 }
 
 @Composable
-private fun SettingRow(title: String, id: String, hint: String? = null, control: @Composable () -> Unit) {
+private fun SettingRow(title: String, id: String, hint: String? = null, control: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            T(title, "set/$id", PicoTheme.typography.labelLarge, PicoTheme.colorScheme.labelPrimary)
+            T(title, "set/$id", PicoTheme.typography.labelLarge, PicoTheme.colorScheme.labelPrimary, Modifier.fillMaxWidth(), maxLines = 2)
             if (hint != null) T(hint, "set/$id/hint", PicoTheme.typography.bodySmall, PicoTheme.colorScheme.labelSecondary, Modifier.fillMaxWidth(), maxLines = 2)
         }
         HGap(12.dp)
@@ -256,4 +256,4 @@ private fun SettingRow(title: String, id: String, hint: String? = null, control:
     }
 }
 
-internal const val VERSION = "0.1.0"
+internal const val VERSION = "0.1.1"

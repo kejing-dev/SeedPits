@@ -31,6 +31,11 @@ object WindowCtl {
     var panelState by mutableStateOf("never")
     var levelHint by mutableStateOf(false)
         private set
+    /**
+     * After a recall the window reopens with Placement.none() (profile D43) instead of Placement.right(board).
+     * Emulator 6.2.0: the reopened window still lands beside the board (only a cold start follows the head), see ui-audit §11.
+     */
+    @Volatile var inFront = false
     val panelOpen: Boolean get() = panelState != "never" && panelState != "ON_DESTROY"
     val waiting: Boolean get() = gate.waiting
 
@@ -49,6 +54,7 @@ object WindowCtl {
 
     /** "叫回面前": close, wait for ON_DESTROY, then open through the gate (a reopened window comes up in front). */
     fun recall() {
+        inFront = true
         if (!panelOpen) { openWindow("recall"); return }
         recallPending = true
         Log.i(TAG, "WINDOW recall: close first")
@@ -70,6 +76,16 @@ object WindowCtl {
         runCatching { navigator?.closeWindowContainer(CONTROL, CONTROL_TAG) }
     }
 
+    /** Exit (D26 / D43): close the control window and the board volume itself (the navigator belongs to the board). */
+    fun closeAll() {
+        gate.cancel()
+        main.removeCallbacks(watchdog)
+        val nav = navigator ?: return
+        runCatching { nav.closeWindowContainer(CONTROL, CONTROL_TAG) }.onFailure { Log.w(TAG, "EXIT close control: $it") }
+        runCatching { nav.closeWindowContainer() }.onFailure { Log.w(TAG, "EXIT close board: $it") }
+        Log.i(TAG, "EXIT closed all window containers")
+    }
+
     /** Every frame from the volume's ECS system. */
     fun stepGate(now: Long, pitchDeg: Float?) {
         lastStepMs = now
@@ -81,7 +97,7 @@ object WindowCtl {
         main.removeCallbacks(watchdog)
         val nav = navigator
         if (nav == null) { Log.w(TAG, "WINDOW open why=$why: no navigator"); return }
-        Log.i(TAG, "WINDOW open why=$why")
+        Log.i(TAG, "WINDOW open why=$why inFront=$inFront")
         runCatching { nav.openWindowContainer(CONTROL, CONTROL_TAG) }.onFailure { Log.e(TAG, "WINDOW open failed", it) }
     }
 

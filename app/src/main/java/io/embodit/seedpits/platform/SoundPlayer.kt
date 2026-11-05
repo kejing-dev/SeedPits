@@ -60,7 +60,8 @@ class SoundPlayer(context: Context) {
         }
         val id = variants[v]
         if (synchronized(loaded) { id !in loaded }) return
-        val vol = gain.coerceIn(0f, 1f)
+        // Drops, store thuds and the grab overlap (4 voices): a little headroom so the mix stays under -1 dBFS.
+        val vol = gain.coerceIn(0f, 1f) * (BASE[kind] ?: 1f)
         val left = vol * (1f - pan.coerceIn(-1f, 1f) * 0.5f).coerceAtMost(1f)
         val right = vol * (1f + pan.coerceIn(-1f, 1f) * 0.5f).coerceAtMost(1f)
         pool.play(id, left, right, 1, 0, r.coerceIn(0.5f, 2f))
@@ -68,5 +69,9 @@ class SoundPlayer(context: Context) {
 
     fun release() { runCatching { pool.release() } }
 
-    private companion object { const val TAG = "SeedPits" }
+    private companion object {
+        const val TAG = "SeedPits"
+        /** Same table as tools/make_sounds.py --loudness. */
+        val BASE = mapOf(SoundKind.DROP to 0.72f, SoundKind.STORE to 0.8f, SoundKind.GRAB to 0.72f)
+    }
 }

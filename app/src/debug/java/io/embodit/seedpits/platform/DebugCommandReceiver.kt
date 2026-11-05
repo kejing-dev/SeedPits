@@ -28,6 +28,7 @@ import io.embodit.seedpits.ui.window.WindowCtl
  *   tap a–f|A–F · sow a–f (tap twice) · play (= [播]) · cancel · pos 4,4,…(14),S|N · new <level 1–5>[,me|them|random]
  *   undo · redo · hint on|off · more · resign · restart · yes · no · again · menu · continue · welcome
  *   page play|new|rules|settings · lang system|zh|en · sound on|off · volume 0|1|2 · reduced on|off
+ *   auto on|off (soak: your side plays Easy, games restart) · soak (log counts)
  *   digits on|off · tilt 0|15 · freeze on|off · finish (end the animation now) · recall · open
  *   goto S00…S16 (see AGENTS.md) · tex F|off (D10 test glyph) · light <intensity> · state · evidence
  */
@@ -72,6 +73,8 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "digits" -> graph.settings.update { it.copy(showDigits = on) }
             "tilt" -> graph.settings.update { it.copy(tiltDeg = if (a == "0") 0 else 15) }
             "freeze" -> flow.freeze(on)
+            "auto" -> flow.autoPlay = on
+            "soak" -> Log.i(TAG, "SOAK games=${flow.soakGames} watchdogs=${flow.soakWatchdogs} auto=${flow.autoPlay}")
             "finish" -> BoardSceneHolder.scene?.finishNow()
             "recall" -> WindowCtl.recall()
             "open" -> WindowCtl.openWindow("debug")

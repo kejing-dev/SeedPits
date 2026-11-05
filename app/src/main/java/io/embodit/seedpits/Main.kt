@@ -21,7 +21,7 @@ import io.embodit.seedpits.ui.window.WindowCtl
 
 /**
  * Two surfaces in Shared Space (design-package windowModel): the board volume (default container, 0.72 × 0.28 ×
- * 0.32 m from the manifest) and the control window (Planar 560 × 440 dp) to its right.
+ * 0.32 m from the manifest) and the control window (Planar 560 × 640 dp) to its right.
  */
 fun mainApp(scope: SpatialAppScope) =
     with(scope) {
@@ -31,11 +31,12 @@ fun mainApp(scope: SpatialAppScope) =
         WindowContainer(
             WindowCtl.CONTROL,
             form = Form.Planar,
-            defaultSize = WindowContainerSize(width = 560.dp, height = 440.dp),
-            placement = { containers.firstOrNull { it.id == WindowCtl.BOARD }?.let { Placement.right(it) } ?: Placement.none() },
+            defaultSize = WindowContainerSize(width = 560.dp, height = 640.dp),
+            // First open: beside the board. After "叫回面前" (profile D43): Placement.none(), the system's default spot in front of the head.
+            placement = { if (WindowCtl.inFront) Placement.none() else containers.firstOrNull { it.id == WindowCtl.BOARD }?.let { Placement.right(it) } ?: Placement.none() },
         ) {
             AppRoot {
-                ControlScreen(Modifier.windowConstraints(minWidth = 520.dp, minHeight = 400.dp, maxWidth = 900.dp, maxHeight = 640.dp))
+                ControlScreen(Modifier.windowConstraints(minWidth = 520.dp, minHeight = 600.dp, maxWidth = 900.dp, maxHeight = 640.dp))
             }
         }
     }

@@ -84,7 +84,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         }
     }
     val tabs = listOf(
-        Triple(Page.PLAY, R.drawable.ic_grid, R.string.tab_play),
+        Triple(Page.PLAY, R.drawable.ic_game, R.string.tab_play),
         Triple(Page.NEW, R.drawable.ic_add, R.string.tab_new),
         Triple(Page.RULES, R.drawable.ic_library, R.string.tab_rules),
         Triple(Page.SETTINGS, R.drawable.ic_settings, R.string.tab_settings),
@@ -333,10 +333,10 @@ fun exitApp(context: Context, graph: SeedGraph) {
     runCatching { graph.flow.pause() }
     runCatching { graph.sounds.release() }
     runCatching { io.embodit.seedpits.platform.HeadTracker.stop() }
-    runCatching { WindowCtl.close() }
+    runCatching { WindowCtl.closeAll() }
     runCatching {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         am.appTasks.forEach { runCatching { it.finishAndRemoveTask() } }
     }
-    Handler(Looper.getMainLooper()).postDelayed({ exitProcess(0) }, 400)
+    Handler(Looper.getMainLooper()).postDelayed({ exitProcess(0) }, 600)
 }

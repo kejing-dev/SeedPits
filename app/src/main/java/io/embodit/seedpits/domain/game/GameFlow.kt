@@ -184,7 +184,7 @@ class GameFlow(
                 phase = Phase.SOWING, moves = it.moves + pit, position = result.after, redo = if (human) emptyList() else it.redo,
                 previewPit = null, sow = SowAnim(id, result, byAi), animStep = 0, alert = null, moreOpen = false, lastFrom = pit,
                 extraTurns = it.extraTurns + if (human && result.extraTurn) 1 else 0,
-                maxCapture = if (human) maxOf(it.maxCapture, result.capture?.total ?: 0) else it.maxCapture,
+                maxCapture = if (human) maxOf(it.maxCapture, result.capture?.fromAcross ?: 0) else it.maxCapture,
                 coachStep = if (human && it.coachStep < 3) 3 else it.coachStep,
                 hintPit = null,
             )
@@ -196,7 +196,7 @@ class GameFlow(
         val budget = expectedMs(result, byAi) + 2500
         watchdogJob = scope.launch {
             delay(budget)
-            if (s.sow?.id == id) { log("SOW watchdog id=$id"); onSowDone(id) }
+            if (s.sow?.id == id) { soakWatchdogs++; log("SOW watchdog id=$id"); onSowDone(id) }
         }
     }
 
@@ -248,7 +248,31 @@ class GameFlow(
             else -> {
                 set { it.copy(phase = Phase.IDLE, previewPit = null, againSide = null) }
                 refreshHint()
+                if (autoPlay) autoMove()
             }
+        }
+    }
+
+    // ---------------------------------------------------------------- soak (debug `auto on`)
+
+    /** Soak test: your side is played by the Easy engine through the same tap path; finished games restart. */
+    var autoPlay = false
+        set(value) { field = value; if (value && s.phase == Phase.IDLE) autoMove(); if (value && s.phase == Phase.ENDED) scope.launch { delay(800); playAgain() } }
+    var soakGames = 0
+        private set
+    var soakWatchdogs = 0
+        private set
+
+    private fun autoMove() {
+        val gameId = s.gameId
+        val movesAt = s.moves.size
+        scope.launch {
+            delay(300)
+            val st = s
+            if (!autoPlay || st.phase != Phase.IDLE || st.gameId != gameId || st.moves.size != movesAt) return@launch
+            val pit = withContext(engineDispatcher) { KalahEngine().choose(st.position, Level.EASY, Random(st.seed + movesAt), 0) }
+            tapPit(pit)
+            tapPit(pit)
         }
     }
 
@@ -286,7 +310,9 @@ class GameFlow(
         val theirs = pos.northStore + if (resigned) pos.rowTotal(Side.NORTH) else 0
         val clean = !resigned && st.hints == 0 && !st.undone
         val prevStreak = settings.settings.value.streak
+        // A resigned game is not counted (design specialRules: 认输不计连胜): the streak stays as it was.
         val streak = when {
+            resigned -> prevStreak
             winner == Side.SOUTH && clean -> prevStreak + 1
             winner == Side.NORTH -> 0
             else -> prevStreak
@@ -308,6 +334,11 @@ class GameFlow(
         set { it.copy(phase = Phase.ENDED, result = result, previewPit = null, confirm = null, moreOpen = false, page = Page.PLAY, hintPit = null) }
         cue(when (winner) { Side.SOUTH -> Cue.WIN; Side.NORTH -> Cue.LOSE; null -> Cue.DRAW })
         log("GAME ended winner=$winner $mine:$theirs resigned=$resigned moves=${st.moves.size} streak=$streak")
+        if (autoPlay) {
+            soakGames++
+            log("SOAK game=$soakGames watchdogs=$soakWatchdogs")
+            scope.launch { delay(800); if (autoPlay && s.phase == Phase.ENDED) playAgain() }
+        }
     }
 
     // ---------------------------------------------------------------- tools

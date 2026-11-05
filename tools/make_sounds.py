@@ -3,9 +3,13 @@
   python3 tools/make_sounds.py           writes app/src/main/assets/sounds/*.wav
   python3 tools/make_sounds.py --check   prints peak and RMS (dBFS) of every file
 
-No ambience, only event sounds (profile B24). Everything is low-passed (nothing much above ~3 kHz) and
-normalised to a per-sound peak between -4 and -8 dBFS, so the defaults are loud enough without clipping
-(profile B20: peaks inside -1 dBFS).
+No ambience, only event sounds (profile B24). Everything is low-passed (nothing much above ~3 kHz).
+Loudness (profile B20, v0.1.1): every file is soft-saturated until its RMS is at least -19 dBFS, its silent tail
+is trimmed, and its peak is set to PEAK_DB (-1.5 dBFS, inside the -1 dBFS ceiling).
+
+  python3 tools/make_sounds.py --loudness out.wav [seconds]   renders the app's default-volume mix of a played
+                                                               game (same timings as BoardScene) and prints its
+                                                               peak / RMS
 """
 import math
 import os
@@ -87,15 +91,37 @@ def rustle(rnd, length):
     return lowpass(highpass(out, 500), 2800)
 
 
-def normalise(x, peak_db):
+PEAK_DB = -1.5
+MIN_RMS_DB = -19.0
+
+
+def rms_db(x):
+    return 20 * math.log10(max(1e-9, math.sqrt(sum(v * v for v in x) / max(1, len(x)))))
+
+
+def normalise(x, peak_db=None):
+    """Loud but clean: trim the tail below -45 dB, soft-saturate (tanh) until RMS >= MIN_RMS_DB, peak to PEAK_DB."""
     m = max(abs(v) for v in x) or 1.0
-    k = 10 ** (peak_db / 20) / m
-    # 5 ms fade out
-    out = [v * k for v in x]
+    x = [v / m for v in x]
+    # trim the silent tail (keeps at least 60 ms)
+    thr = 10 ** (-45 / 20)
+    end = len(x)
+    while end > n(0.06) and abs(x[end - 1]) < thr:
+        end -= 1
+    x = x[:end]
+    drive = 1.0
+    y = x
+    while True:
+        y = [math.tanh(v * drive) for v in x]
+        m = max(abs(v) for v in y) or 1.0
+        y = [v / m * 10 ** (PEAK_DB / 20) for v in y]
+        if rms_db(y) >= MIN_RMS_DB or drive > 40:
+            break
+        drive *= 1.25
     f = n(0.005)
-    for i in range(min(f, len(out))):
-        out[-1 - i] *= i / f
-    return out
+    for i in range(min(f, len(y))):
+        y[-1 - i] *= i / f
+    return y
 
 
 def write(name, x):
@@ -142,6 +168,76 @@ def build():
     write("draw", normalise(mix(*parts), -6))
 
 
+def read(name):
+    with wave.open(os.path.join(OUT, name + ".wav")) as w:
+        data = w.readframes(w.getnframes())
+    return [v / 32767 for v in struct.unpack("<%dh" % (len(data) // 2), data)]
+
+
+def resample(x, rate):
+    if abs(rate - 1) < 1e-3:
+        return x
+    out = []
+    t = 0.0
+    while t < len(x) - 1:
+        i = int(t); f = t - i
+        out.append(x[i] * (1 - f) + x[i + 1] * f)
+        t += rate
+    return out
+
+
+def loudness(path, seconds=30.0):
+    """The app's sounds at default volume (Volume.HIGH, gain 1.0, SoundPool volume 1) in the order and timing a
+    game plays them: grab, a drop every 110 ms (AI 70 ms), store thuds, extra turn, capture, illegal tap, sweep, win."""
+    rnd = random.Random(5)
+    bank = {k: read(k) for k in ("grab", "drop", "drop_2", "drop_3", "store", "store_2", "store_3", "again", "capture", "illegal", "sweep", "win")}
+    total = n(seconds)
+    mix = [0.0] * total
+    # Per-kind play volume, the same table as SoundPlayer.BASE (overlapping drops leave headroom).
+    base = {"drop": 0.72, "store": 0.8, "grab": 0.72}
+    def put(name, t, rate=1.0):
+        k = base.get(name.split("_")[0], 1.0)
+        s = [v * k for v in resample(bank[name], rate)]
+        o = n(t)
+        for i, v in enumerate(s):
+            if o + i < total:
+                mix[o + i] += v
+    t = 0.3
+    move = 0
+    while t < seconds - 3:
+        ai = move % 2 == 1
+        per = 0.07 if ai else 0.11
+        stones = rnd.randint(3, 9)
+        put("grab", t); t += 0.2
+        for k in range(stones):
+            last = k == stones - 1
+            store = (k == stones - 3) or (last and move % 3 == 0)
+            if stones <= 10 or k % 2 == 1 or last:
+                if store:
+                    put(rnd.choice(["store", "store_2", "store_3"]), t + per * 1.6, rnd.uniform(0.93, 1.07))
+                else:
+                    put(rnd.choice(["drop", "drop_2", "drop_3"]), t + per * 1.6, (0.9 + min(k + 4, 12) * 0.02) * rnd.uniform(0.93, 1.07))
+            t += per
+        t += 0.2
+        if move % 3 == 0:
+            put("again", t); t += 0.6
+        elif move % 4 == 1:
+            put("capture", t); t += 0.45
+        if move % 5 == 2:
+            put("illegal", t); t += 0.3
+        t += 0.45 if not ai else 0.6   # the player looks / the AI thinks (>= 400 ms)
+        move += 1
+    put("sweep", seconds - 2.8)
+    put("win", seconds - 1.9)
+    peak = max(abs(v) for v in mix)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
+        w.writeframes(b"".join(struct.pack("<h", max(-32767, min(32767, int(v * 32767)))) for v in mix))
+    active = [v for v in mix]
+    print("loudness %s: %.1fs peak %.1f dBFS (%s) rms %.1f dBFS" % (path, seconds, 20 * math.log10(peak), "CLIPS" if peak > 1 else "no clipping", rms_db(active)))
+    return peak, rms_db(active)
+
+
 def check():
     for f in sorted(os.listdir(OUT)):
         with wave.open(os.path.join(OUT, f)) as w:
@@ -153,6 +249,10 @@ def check():
 
 
 if __name__ == "__main__":
+    if "--loudness" in sys.argv:
+        i = sys.argv.index("--loudness")
+        loudness(sys.argv[i + 1], float(sys.argv[i + 2]) if len(sys.argv) > i + 2 else 30.0)
+        sys.exit(0)
     if "--check" not in sys.argv:
         build()
     check()

@@ -381,8 +381,23 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
         placeRoot()
     }
 
+    /**
+     * The user may resize the volume uniformly with the system handle (manifest resizerestriction=1). The whole
+     * scene scales with it so the 0.66 m board always fits: root scale = the smallest ratio to the designed
+     * 0.72 × 0.28 × 0.32 m volume, and the layout below works in root-local (unscaled) metres.
+     */
+    var rootScale = 1f
+        private set
+
     private fun placeRoot() {
-        val half = regionHalf ?: P3(0.36f, 0.14f, 0.16f)
+        val actual = regionHalf ?: DESIGN_HALF
+        val k = minOf(actual.x / DESIGN_HALF.x, actual.y / DESIGN_HALF.y, actual.z / DESIGN_HALF.z).coerceIn(0.2f, 5f)
+        if (kotlin.math.abs(k - rootScale) > 1e-4f || regionHalf == null) {
+            rootScale = k
+            root.transform().setScaleVector(Vector3(k, k, k))
+            Log.i(TAG, "SCALE root=$k half=$actual")
+        }
+        val half = actual * (1f / k)
         val a = (tiltNow * PI / 180).toFloat()
         val y = -half.y + FLOOR_LIFT + PitLayout.BOARD_T * cos(a)
         val nearZ = minOf(half.z - 0.035f, PitLayout.BOARD_D / 2 + 0.02f)
@@ -771,7 +786,7 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
     fun evidence(): String {
         val half = regionHalf
         val v = runCatching { root.getVisualBounds(root.getParent(), true, true) }.getOrNull()
-        return "regionHalf=$half tilt=$tiltNow visualMin=${v?.min} visualMax=${v?.max} stones=${stones.size} cells=${cellStones.map { it.size }} built=$built"
+        return "regionHalf=$half scale=$rootScale tilt=$tiltNow visualMin=${v?.min} visualMax=${v?.max} stones=${stones.size} cells=${cellStones.map { it.size }} built=$built"
     }
 
     fun dispose() {
@@ -788,6 +803,9 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
         const val PLATE_NAME = "seatPlate"
         const val FLOOR_LIFT = 0.012f
         const val PREVIEW_LIFT = 0.006f
+
+        /** Half extents of the designed volume (manifest 0.72 × 0.28 × 0.32 m). */
+        val DESIGN_HALF = P3(0.36f, 0.14f, 0.16f)
 
         fun pitOf(name: String?): Int? = name?.takeIf { it.startsWith("pit:") }?.substring(4)?.toIntOrNull()
     }

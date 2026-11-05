@@ -44,7 +44,7 @@
     <string name="preview_store">%2$d from %1$s: %3$s. Go again.</string>
     <string name="preview_capture">%2$d from %1$s: %3$s. Last one lands empty. Their %4$d across are yours.</string>
     <string name="your_store">your store</string>
-    <string name="path_sep">, </string>
+    <string name="path_sep">,\u0020</string>
     <string name="alert_theirs">That\'s their side. Tap a lit pit on yours.</string>
     <string name="alert_empty">Nothing in there.</string>
     <string name="alert_wait">It\'s their move.</string>
@@ -115,15 +115,15 @@
     <string name="set_digits_hint">The number tile beside every pit</string>
     <string name="set_tilt">Tilt</string>
     <string name="set_recall">Bring panel back</string>
-    <string name="set_recall_hint">Look straight ahead; the panel reopens in front of you.</string>
+    <string name="set_recall_hint">Closes and reopens the panel. It comes back beside the board; move the board itself with the handle under it.</string>
     <string name="set_about">About · v%s</string>
-    <string name="about_body">Offline. Noto Sans (OFL), Material Symbols (Apache-2.0).</string>
+    <string name="about_body">offline, Noto Sans (OFL), Material Symbols (Apache-2.0)</string>
     <string name="set_exit">Quit app</string>
     <string name="exit_title">Leave Seed Pits?</string>
     <string name="exit_body">This game is saved. Pick it up next time.</string>
     <string name="exit_yes">Quit</string>
 
-    <string name="plate_you">You · your turn</string>
+    <string name="plate_you">Your turn</string>
     <string name="plate_you_again">You · go again</string>
     <string name="plate_ai_turn">%s · thinking</string>
     <string name="plate_ai_again">%s · goes again</string>
@@ -135,4 +135,5 @@
     <string name="plate_welcome">Read the rules</string>
     <string name="plate_open">Tap to open the panel</string>
     <string name="plate_level">Look straight ahead</string>
+    <string name="set_sound_volume">Sound · volume</string>
 </resources>
