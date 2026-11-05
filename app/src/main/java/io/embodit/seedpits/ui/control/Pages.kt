@@ -96,7 +96,18 @@ internal fun NewPage(state: GameState, settings: Settings, flow: GameFlow) {
             }
         }
         Gap(16.dp)
-        PrimaryButton(stringResource(R.string.new_start), "start", { flow.startGame(GameConfig(level, first)) }, Modifier.fillMaxWidth(), icon = R.drawable.ic_play)
+        PrimaryButton(stringResource(R.string.new_start), "start", { flow.requestNewGame(GameConfig(level, first)) }, Modifier.fillMaxWidth(), icon = R.drawable.ic_play)
+        if (state.confirm == Confirm.NEW_GAME) {
+            // S02 → S13: a game in progress (or the saved one) would be lost.
+            val opp = if (state.inProgress) state.config.level else state.saved?.config?.level ?: state.config.level
+            val moves = if (state.inProgress) state.moves.size else state.saved?.moves?.size ?: 0
+            Gap(10.dp)
+            ConfirmBar(
+                text = stringResource(R.string.confirm_newgame), body = stringResource(R.string.confirm_newgame_body, levelName(opp), moves),
+                yes = stringResource(R.string.confirm_yes_newgame), id = "confirm/NEW_GAME",
+                onYes = { flow.confirmYes() }, onNo = { flow.cancelConfirm() },
+            )
+        }
         Gap(10.dp)
         T(stringResource(R.string.new_streak, settings.streak), "new/streak", PicoTheme.typography.bodySmall, ink2, Modifier.fillMaxWidth(), maxLines = 2)
     }
@@ -256,4 +267,4 @@ private fun SettingRow(title: String, id: String, hint: String? = null, control:
     }
 }
 
-internal const val VERSION = "0.1.1"
+internal const val VERSION = "0.1.2"

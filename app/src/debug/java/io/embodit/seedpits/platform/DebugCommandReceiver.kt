@@ -25,6 +25,7 @@ import io.embodit.seedpits.ui.window.WindowCtl
  *     adb shell am broadcast -a io.embodit.seedpits.DEBUG -p io.embodit.seedpits --es cmd tap --es a d
  *
  * cmd (+ `--es a <arg>`):
+ *   start <level>[,me|them|random] (new-game page [开始], confirms when a game is in progress)
  *   tap a–f|A–F · sow a–f (tap twice) · play (= [播]) · cancel · pos 4,4,…(14),S|N · new <level 1–5>[,me|them|random]
  *   undo · redo · hint on|off · more · resign · restart · yes · no · again · menu · continue · welcome
  *   page play|new|rules|settings · lang system|zh|en · sound on|off · volume 0|1|2 · reduced on|off
@@ -52,6 +53,13 @@ class DebugCommandReceiver : BroadcastReceiver() {
                 val first = when (parts.getOrNull(1)?.trim()) { "them" -> FirstMover.THEM; "random" -> FirstMover.RANDOM; else -> FirstMover.ME }
                 flow.startGame(GameConfig(level, first))
             }
+            "start" -> {
+                // The new-game page's [开始] (same path as the button: confirms when a game is in progress).
+                val parts = a.split(",")
+                val level = Level.of(parts.getOrNull(0)?.toIntOrNull() ?: flow.state.value.config.level.number)
+                val first = when (parts.getOrNull(1)?.trim()) { "them" -> FirstMover.THEM; "random" -> FirstMover.RANDOM; else -> FirstMover.ME }
+                flow.setPage(Page.NEW); flow.requestNewGame(GameConfig(level, first))
+            }
             "undo" -> flow.undo()
             "redo" -> flow.redo()
             "hint" -> flow.setHint(on)
@@ -76,7 +84,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "auto" -> flow.autoPlay = on
             "soak" -> Log.i(TAG, "SOAK games=${flow.soakGames} watchdogs=${flow.soakWatchdogs} auto=${flow.autoPlay}")
             "finish" -> BoardSceneHolder.scene?.finishNow()
-            "recall" -> WindowCtl.recall()
+            "recall", "reopen" -> WindowCtl.recall()
             "open" -> WindowCtl.openWindow("debug")
             "tex" -> DebugFlags.testGlyph = a.equals("F", ignoreCase = true)
             "light" -> a.toFloatOrNull()?.let { BoardSceneHolder.scene?.lightIntensity = it }

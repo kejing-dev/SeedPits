@@ -165,14 +165,16 @@ private fun PlayPage(state: GameState, settings: Settings, flow: GameFlow, onMut
             }
         }
         Gap(10.dp)
-        // Main action slot: [播] + [取消] in a preview, [重做] right after an undo, otherwise empty (kept tall).
-        Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Main action slot (sample v1.4 change 3): 64 dp × 80 % of the window; [播] with [取消] centred under it in a
+        // preview, [重做] right after an undo, otherwise empty. The slot keeps its height so nothing jumps.
+        Column(Modifier.fillMaxWidth().height(124.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             when {
                 state.phase == Phase.PREVIEW -> {
-                    PrimaryButton(stringResource(R.string.btn_sow), "sow", { flow.confirmSow() }, Modifier.weight(1f), icon = R.drawable.ic_play)
-                    SecondaryButton(stringResource(R.string.btn_cancel), "cancel", { flow.cancelPreview() }, icon = R.drawable.ic_close, minWidth = 120.dp)
+                    PrimaryButton(stringResource(R.string.btn_sow), "sow", { flow.confirmSow() }, Modifier.fillMaxWidth(0.8f).height(64.dp), icon = R.drawable.ic_play, tall = true)
+                    Gap(8.dp)
+                    SecondaryButton(stringResource(R.string.btn_cancel), "cancel", { flow.cancelPreview() }, icon = R.drawable.ic_close, minWidth = 140.dp)
                 }
-                state.canRedo && state.phase == Phase.IDLE -> PrimaryButton(stringResource(R.string.btn_redo), "redo", { flow.redo() }, Modifier.weight(1f), icon = R.drawable.ic_redo)
+                state.canRedo && state.phase == Phase.IDLE -> PrimaryButton(stringResource(R.string.btn_redo), "redo", { flow.redo() }, Modifier.fillMaxWidth(0.8f).height(64.dp), icon = R.drawable.ic_redo, tall = true)
                 else -> Unit
             }
         }
@@ -293,7 +295,8 @@ private fun ResultCard(state: GameState, flow: GameFlow) {
         r.winner == Side.NORTH -> stringResource(R.string.result_lose)
         else -> stringResource(R.string.result_draw)
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    // Centred in the window (sample v1.4 change 3): the card ends well above the window's bottom edge.
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         T(title, "result/title", PicoTheme.typography.headlineSmall, ink, maxLines = 2)
         Gap(8.dp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -318,10 +321,9 @@ private fun ResultCard(state: GameState, flow: GameFlow) {
         r.lockedAtMove?.let { if (r.winner == Side.SOUTH) parts += stringResource(R.string.stats_locked, it) }
         T(parts.joinToString(" · "), "result/stats2", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.fillMaxWidth(), maxLines = 2)
         Gap(14.dp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PrimaryButton(stringResource(R.string.btn_play_again), "again", { flow.playAgain() }, Modifier.weight(1f), icon = R.drawable.ic_replay)
-            SecondaryButton(stringResource(R.string.btn_menu), "menu", { flow.toMenu() }, Modifier.weight(1f).height(56.dp), icon = R.drawable.ic_home, minWidth = 0.dp)
-        }
+        PrimaryButton(stringResource(R.string.btn_play_again), "again", { flow.playAgain() }, Modifier.fillMaxWidth(0.8f).height(64.dp), icon = R.drawable.ic_replay, tall = true)
+        Gap(10.dp)
+        SecondaryButton(stringResource(R.string.btn_menu), "menu", { flow.toMenu() }, Modifier.fillMaxWidth(0.5f), icon = R.drawable.ic_home, minWidth = 0.dp)
         Gap(12.dp)
         T(stringResource(R.string.source_line), "result/source", PicoTheme.typography.bodySmall, ink2, Modifier.fillMaxWidth(), maxLines = 3)
     }

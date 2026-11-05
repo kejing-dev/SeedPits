@@ -114,8 +114,8 @@
     <string name="set_digits">Show counts</string>
     <string name="set_digits_hint">The number tile beside every pit</string>
     <string name="set_tilt">Tilt</string>
-    <string name="set_recall">Bring panel back</string>
-    <string name="set_recall_hint">Closes and reopens the panel. It comes back beside the board; move the board itself with the handle under it.</string>
+    <string name="set_recall">Reopen panel</string>
+    <string name="set_recall_hint">The panel reopens beside the board. Drag it or the board by the handle underneath.</string>
     <string name="set_about">About · v%s</string>
     <string name="about_body">offline, Noto Sans (OFL), Material Symbols (Apache-2.0)</string>
     <string name="set_exit">Quit app</string>
@@ -136,4 +136,7 @@
     <string name="plate_open">Tap to open the panel</string>
     <string name="plate_level">Look straight ahead</string>
     <string name="set_sound_volume">Sound · volume</string>
+    <string name="confirm_newgame">Start a new game? You\'ll lose this one.</string>
+    <string name="confirm_newgame_body">You\'re %2$d moves into this game vs %1$s. A new game ends it.</string>
+    <string name="confirm_yes_newgame">New game</string>
 </resources>

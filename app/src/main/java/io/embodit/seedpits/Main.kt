@@ -32,8 +32,8 @@ fun mainApp(scope: SpatialAppScope) =
             WindowCtl.CONTROL,
             form = Form.Planar,
             defaultSize = WindowContainerSize(width = 560.dp, height = 640.dp),
-            // First open: beside the board. After "叫回面前" (profile D43): Placement.none(), the system's default spot in front of the head.
-            placement = { if (WindowCtl.inFront) Placement.none() else containers.firstOrNull { it.id == WindowCtl.BOARD }?.let { Placement.right(it) } ?: Placement.none() },
+            // Always beside the board, also after [重开控制窗] (D44 / D45 corrected 11-05: Shared Space does not promise "in front of you").
+            placement = { containers.firstOrNull { it.id == WindowCtl.BOARD }?.let { Placement.right(it) } ?: Placement.none() },
         ) {
             AppRoot {
                 ControlScreen(Modifier.windowConstraints(minWidth = 520.dp, minHeight = 600.dp, maxWidth = 900.dp, maxHeight = 640.dp))

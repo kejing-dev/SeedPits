@@ -104,6 +104,18 @@ class GameFlow(
         enterTurn()
     }
 
+    /**
+     * New-game page [开始] (profile D44): with a game in progress or a saved one, ask first; [开新局] goes through
+     * [confirmYes]. Without either it starts at once.
+     */
+    fun requestNewGame(config: GameConfig) {
+        val st = s
+        if (st.inProgress || st.saved != null) {
+            set { it.copy(confirm = Confirm.NEW_GAME, pendingConfig = config, moreOpen = false) }
+            log("CONFIRM ask NEW_GAME moves=${if (st.inProgress) st.moves.size else st.saved?.moves?.size}")
+        } else startGame(config)
+    }
+
     fun continueSaved() {
         val saved = s.saved ?: return
         restore(saved)
@@ -398,6 +410,7 @@ class GameFlow(
             Confirm.RESIGN -> if (s.phase != Phase.ENDED && s.phase != Phase.SETUP && s.phase != Phase.WELCOME) end(resigned = true)
             Confirm.RESTART -> { cancelJobs(); repo.clear(); set { it.copy(phase = Phase.SETUP, page = Page.NEW, saved = null, result = null, sow = null, previewPit = null) } }
             Confirm.EXIT -> { persist(); onExit() }
+            Confirm.NEW_GAME -> { repo.clear(); startGame(s.pendingConfig ?: s.config) }
         }
         return c
     }
@@ -406,7 +419,14 @@ class GameFlow(
 
     fun setPage(page: Page) {
         if (s.page == page) return
-        set { it.copy(page = page, moreOpen = false, confirm = if (it.confirm == Confirm.EXIT && page != Page.SETTINGS) null else it.confirm) }
+        set {
+            val keep = when (it.confirm) {
+                Confirm.EXIT -> page == Page.SETTINGS
+                Confirm.NEW_GAME -> page == Page.NEW
+                else -> page == Page.PLAY
+            }
+            it.copy(page = page, moreOpen = false, confirm = if (keep) it.confirm else null)
+        }
         log("PAGE $page")
     }
 

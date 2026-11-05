@@ -68,4 +68,31 @@ class GameFlowTest {
         assertTrue(settings.settings.value.firstRunDone)
         assertEquals(Side.SOUTH, f.state.value.position.toMove)
     }
+
+    @Test fun newGameAsksFirstWhenAGameIsInProgress() {
+        val f = flow(FakeSettingsRepository(Settings(firstRunDone = true)))
+        f.start()
+        f.startGame(GameConfig(Level.EASY, FirstMover.ME))
+        f.tapPit(2); f.tapPit(2)                       // c: extra turn, still your move
+        f.onSowDone(f.state.value.sow!!.id)
+        val moves = f.state.value.moves
+        f.setPage(io.embodit.seedpits.domain.game.Page.NEW)
+        f.requestNewGame(GameConfig(Level.MASTER, FirstMover.ME))
+        assertEquals(Confirm.NEW_GAME, f.state.value.confirm)
+        assertEquals(moves, f.state.value.moves)        // nothing lost yet
+        f.cancelConfirm()
+        assertEquals(moves, f.state.value.moves)
+        f.requestNewGame(GameConfig(Level.MASTER, FirstMover.ME))
+        f.confirmYes()
+        assertTrue(f.state.value.moves.isEmpty())
+        assertEquals(Level.MASTER, f.state.value.config.level)
+    }
+
+    @Test fun newGameStartsAtOnceWithNothingToLose() {
+        val f = flow(FakeSettingsRepository(Settings(firstRunDone = true)))
+        f.start()
+        f.requestNewGame(GameConfig(Level.SMART, FirstMover.ME))
+        assertEquals(null, f.state.value.confirm)
+        assertEquals(Phase.IDLE, f.state.value.phase)
+    }
 }

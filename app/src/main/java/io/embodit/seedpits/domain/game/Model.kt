@@ -39,7 +39,7 @@ enum class AlertKind { THEIRS, EMPTY, NOT_YOUR_TURN }
 
 data class Alert(val kind: AlertKind, val pit: Int, val id: Int)
 
-enum class Confirm { RESTART, RESIGN, EXIT }
+enum class Confirm { RESTART, RESIGN, EXIT, NEW_GAME }
 
 /** A move being animated. The position is already committed; the board counts up through [SowResult.steps]. */
 data class SowAnim(val id: Int, val result: SowResult, val byAi: Boolean)
@@ -95,8 +95,13 @@ data class GameState(
     val frozen: Boolean = false,
     val againSide: Side? = null,
     val startedAt: Long = 0L,
+    /** The configuration waiting on the new-game confirmation (S02 → S13). */
+    val pendingConfig: GameConfig? = null,
     val seed: Long = 1L,
 ) {
+    /** A game with progress that a new game would throw away: moves made and not over (design S02 → S13). */
+    val inProgress: Boolean get() = phase in setOf(Phase.IDLE, Phase.PREVIEW, Phase.SOWING, Phase.AGAIN, Phase.THINKING) && moves.isNotEmpty() && !position.isOver
+
     val humanTurn: Boolean get() = position.toMove == Side.SOUTH && !position.isOver
 
     /** The counts the board and the panel show: the animation cursor while sowing, else the committed position. */

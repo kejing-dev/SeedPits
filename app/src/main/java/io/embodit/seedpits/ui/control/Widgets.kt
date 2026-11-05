@@ -51,13 +51,13 @@ internal fun T(
 
 /** The page's main action: 56 dp, ochre. */
 @Composable
-internal fun PrimaryButton(text: String, id: String, onClick: () -> Unit, modifier: Modifier = Modifier, @DrawableRes icon: Int? = null, enabled: Boolean = true) {
+internal fun PrimaryButton(text: String, id: String, onClick: () -> Unit, modifier: Modifier = Modifier, @DrawableRes icon: Int? = null, enabled: Boolean = true, tall: Boolean = false) {
     Button(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        size = ButtonDefaults.Regular.copy(height = 56.dp, minWidth = 160.dp),
-        shape = RoundedCornerShape(28.dp),
+        size = ButtonDefaults.Regular.copy(height = if (tall) 64.dp else 56.dp, minWidth = 160.dp),
+        shape = RoundedCornerShape(if (tall) 32.dp else 28.dp),
         colors = ButtonDefaults.buttonColors(containerColor = PicoTheme.colorScheme.interaction, contentColor = PicoTheme.colorScheme.labelPrimaryLight),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
