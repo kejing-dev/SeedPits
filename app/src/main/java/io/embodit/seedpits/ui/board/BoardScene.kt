@@ -471,11 +471,57 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
         }
     }
 
-    private fun placeStone(id: Int, p: P3, yawExtra: Float = 0f) {
+    private fun placeStone(id: Int, p: P3, yawExtra: Float = 0f, tumble: Float = 0f, tumbleAxis: P3 = P3(1f, 0f, 0f)) {
         val s = stones[id]
         s.pos = p
         s.entity.transform().setPosition(Vector3(p.x, p.y, p.z))
-        s.entity.transform().setQuaternion(Quat(Vector3(0f, 1f, 0f), s.yaw + yawExtra))
+        val yaw = Quat(Vector3(0f, 1f, 0f), s.yaw + yawExtra)
+        val q = if (tumble == 0f) yaw else Quat(Vector3(tumbleAxis.x, tumbleAxis.y, tumbleAxis.z), tumble).times(yaw)
+        s.entity.transform().setQuaternion(q)
+    }
+
+    // ------------------------------------------------------------------ physical motion (profile D51)
+
+    /**
+     * One stone thrown from [from] to [to]: a parabola whose apex is [lift] over the straight line, horizontal speed
+     * easing out so it slows before it lands, a tumble about the axis across its path; it touches down [roll] short of
+     * its slot and, in the settle, makes one small hop and rolls the last few millimetres in.
+     */
+    private class Throw(val from: P3, val to: P3, val lift: Float, val roll: P3, val spin: Float) {
+        val touch: P3 = to - roll
+        val axis: P3 = run {
+            val dx = to.x - from.x; val dz = to.z - from.z
+            val l = kotlin.math.sqrt(dx * dx + dz * dz)
+            if (l < 1e-5f) P3(1f, 0f, 0f) else P3(-dz / l, 0f, dx / l)
+        }
+
+        /** Flight, u in 0..1 (touch-down at 1). */
+        fun at(u: Float): P3 {
+            val h = 1f - (1f - u) * (1f - u)                     // horizontal: decelerates into the landing
+            val x = from.x + (touch.x - from.x) * h
+            val z = from.z + (touch.z - from.z) * h
+            val y = from.y + (touch.y - from.y) * u + 4f * lift * u * (1f - u)   // vertical: gravity parabola
+            return P3(x, y, z)
+        }
+
+        /** Settle after touch-down, v in 0..1: one hop of ~3 mm and a short roll into the slot. */
+        fun settle(v: Float): P3 {
+            val e = Easing.out(v)
+            val hop = 0.0032f * sin((PI * minOf(1f, v * 1.6f)).toFloat()) * (1f - v * 0.4f)
+            return touch.lerp(to, e) + P3(0f, maxOf(0f, hop), 0f)
+        }
+
+        fun spinAt(u: Float) = spin * u
+        fun rollSpin(v: Float) = spin + (roll.length() / (PitLayout.STONE_D / 2)) * Easing.out(v)
+    }
+
+    private fun throwOf(from: P3, to: P3, rnd: Random, lift: Float): Throw {
+        val dx = to.x - from.x; val dz = to.z - from.z
+        val l = kotlin.math.sqrt(dx * dx + dz * dz).coerceAtLeast(1e-4f)
+        val rollLen = 0.0018f + rnd.nextFloat() * 0.0022f              // 2–4 mm roll along the path
+        val wobble = (rnd.nextFloat() - 0.5f) * 0.004f                   // ±2 mm sideways
+        val roll = P3(dx / l * rollLen - dz / l * wobble, 0f, dz / l * rollLen + dx / l * wobble)
+        return Throw(from, to, lift * (0.85f + rnd.nextFloat() * 0.3f), roll, (rnd.nextFloat() * 2f + 2f) * (if (rnd.nextBoolean()) 1f else -1f))
     }
 
     // ------------------------------------------------------------------ sowing
@@ -504,15 +550,19 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
                     placeStone(sid, starts[k].lerp(PitLayout.slot(r.drops[k], slotIdx) + stones[sid].jitter, u))
                 }
             }, onEnd = { report(1 + r.drops.size) })
-            appendCaptureAndSweep(clips, r, 0.15f, 0.12f, id, ::report)
+            appendCaptureAndSweep(clips, r, 0.15f, id, ::report, reduced = true)
         } else {
-            val per = if (byAi) 0.070f else 0.110f
+            val per = if (byAi) 0.070f else 0.110f        // one stone every 70 / 110 ms (D51: 60–120 ms)
             val flight = per * 1.6f
+            val settle = 0.12f
             val grab = 0.20f
             val origin = PitLayout.center(r.from)
-            val rnd = Random(id)
+            val rnd = Random(id * 7919 + r.from)
             val offsets = hand.map { P3((rnd.nextFloat() - 0.5f) * 2 * PitLayout.HANDFUL_R * 0.8f, rnd.nextFloat() * 0.012f, (rnd.nextFloat() - 0.5f) * 2 * PitLayout.HANDFUL_R * 0.8f) }
             val starts = hand.map { stones[it].pos }
+            // Launch times: every `per`, ±12 % jitter, never out of order.
+            val launches = FloatArray(r.drops.size) { k -> grab + per * k + (rnd.nextFloat() - 0.5f) * per * 0.24f }
+            for (k in 1 until launches.size) launches[k] = maxOf(launches[k], launches[k - 1] + per * 0.6f)
             // The handful's centre: above the origin, then above each target in turn.
             val stops = listOf(origin) + r.drops.map { PitLayout.center(it) }
             fun handAt(t: Float): P3 {
@@ -525,32 +575,40 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
                 return P3(c.x, PitLayout.HANDFUL_LIFT, c.z)
             }
             var released = 0
-            // Grab: every stone of the pit rises into a cluster 8 cm over the rim.
+            // Grab: the stones leave the pit one after another (staggered), each on a short arc up into the handful.
+            val lift = grab * 0.65f
+            val stagger = if (hand.size > 1) (grab - lift) / (hand.size - 1) else 0f
+            val grabThrows = hand.indices.map { k -> throwOf(starts[k], handAt(0f) + offsets[k], rnd, 0.015f) }
             clips += Clip(0f, grab, onStart = { onEvent(SceneEvent.Sound(SoundKind.GRAB, 1f, pan(origin))); report(1) }, update = { u ->
-                val e = Easing.out(u)
-                val h = handAt(0f)
-                hand.forEachIndexed { k, sid -> placeStone(sid, starts[k].lerp(h + offsets[k], e) + P3(0f, 0.01f * Easing.hump(u), 0f), e * 0.6f) }
+                val t = u * grab
+                hand.forEachIndexed { k, sid ->
+                    val v = ((t - k * stagger) / lift).coerceIn(0f, 1f)
+                    val th = grabThrows[k]
+                    // Rising: ease-out (fast off the bottom, slowing into the hand).
+                    val e = Easing.out(v)
+                    placeStone(sid, th.from.lerp(th.to, e) + P3(0f, 0.012f * Easing.hump(v), 0f), 0.6f * e, th.spinAt(v) * 0.5f, th.axis)
+                }
             })
-            // The cluster drifts along the row while stones leave it one by one.
-            val handEnd = grab + per * r.drops.size
+            // The cluster drifts along the row while stones leave it one by one; the stones in it jostle a little.
+            val handEnd = launches.last()
             clips += Clip(grab, handEnd - grab + 0.001f, update = { u ->
                 val t = grab + u * (handEnd - grab)
                 val h = handAt(t)
-                for (k in released until hand.size) placeStone(hand[k], h + offsets[k] + P3(0f, 0.002f * sin(t * 30f + k), 0f), 0.6f)
+                for (k in released until hand.size) placeStone(hand[k], h + offsets[k] + P3(0f, 0.002f * sin(t * 23f + k * 1.7f), 0f), 0.6f, 0.15f * sin(t * 9f + k), grabThrows[k].axis)
             })
             for ((k, cell) in r.drops.withIndex()) {
                 val sid = hand[k]
                 val (_, slotIdx) = destinations[k]
-                val launch = grab + per * k
+                val launch = launches[k]
                 val target = PitLayout.slot(cell, slotIdx) + stones[sid].jitter
+                val from = handAt(launch) + offsets[k]
+                val th = throwOf(from, target, rnd, PitLayout.ARC_LIFT * 0.25f)
                 val loud = r.drops.size <= 10 || k % 2 == 1 || k == r.drops.lastIndex
                 clips += Clip(launch, flight, onStart = { released = maxOf(released, k + 1) }, update = { u ->
-                    val from = handAt(launch) + offsets[k]
-                    val e = Easing.inQuad(u) * 0.35f + u * 0.65f
-                    val p = from.lerp(target, e) + P3(0f, 0.02f * Easing.hump(u), 0f)
-                    placeStone(sid, p, 0.6f * (1 - u))
+                    placeStone(sid, th.at(u), 0.6f * (1 - u), th.spinAt(u), th.axis)
                 }, onEnd = {
-                    placeStone(sid, target)
+                    // Touch-down frame: the sound plays here (D51), the counts step here.
+                    placeStone(sid, th.touch, 0f, th.spin, th.axis)
                     if (loud) {
                         val count = cellStones[cell].indexOf(sid) + 1
                         val store = Kalah.isStore(cell)
@@ -559,8 +617,11 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
                     if (Kalah.isStore(cell) && k == r.drops.lastIndex) glowFlash(cell)
                     report(2 + k)
                 })
+                clips += Clip(launch + flight, settle, update = { v ->
+                    placeStone(sid, th.settle(v), 0f, th.rollSpin(v), th.axis)
+                }, onEnd = { placeStone(sid, target) })
             }
-            appendCaptureAndSweep(clips, r, grab + per * (r.drops.size - 1) + flight + 0.08f, 1f, id, ::report)
+            appendCaptureAndSweep(clips, r, launches.last() + flight + 0.08f, id, ::report, reduced = false)
         }
         timeline = Timeline(clips, tail = 0.05f) {
             timeline = null
@@ -572,52 +633,51 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
         Log.i(TAG, "SOW play id=$id from=${Kalah.letter(r.from)} drops=${r.drops.size} total=${"%.2f".format(timeline?.total ?: 0f)} reduced=$reduced ai=$byAi")
     }
 
-    private fun appendCaptureAndSweep(clips: MutableList<Clip>, r: SowResult, startAt: Float, factor: Float, id: Int, report: (Int) -> Unit) {
+    /**
+     * Capture and sweep: the stones go one after another (60–90 ms apart), each on its own arc into the store,
+     * touching down with a thud and settling. Slots are reserved now, so every stone's path is known in advance.
+     */
+    private fun appendCaptureAndSweep(clips: MutableList<Clip>, r: SowResult, startAt: Float, id: Int, report: (Int) -> Unit, reduced: Boolean) {
         var t = startAt
         var stepBase = 1 + r.drops.size
+        val rnd = Random(id * 31 + 7)
+        fun group(cells: List<Int>, store: Int, kind: SoundKind, maxDur: Float, onDone: () -> Unit, step: Int) {
+            val movers = ArrayList<Pair<Int, P3>>()
+            for (cell in cells) {
+                cellStones[cell].forEachIndexed { i, sid -> movers += sid to (PitLayout.slot(cell, i) + stones[sid].jitter) }
+                cellStones[cell].clear()
+            }
+            val targets = movers.map { (sid, _) -> cellStones[store].add(sid); PitLayout.slot(store, cellStones[store].size - 1) + stones[sid].jitter }
+            if (reduced) {
+                clips += Clip(t, 0.12f, onStart = { onEvent(SceneEvent.Sound(kind, 1f, pan(PitLayout.center(store)))) }, update = { u ->
+                    movers.forEachIndexed { i, (sid, from) -> placeStone(sid, from.lerp(targets[i], u)) }
+                }, onEnd = { onDone(); report(step) })
+                t += 0.14f
+                return
+            }
+            val flight = 0.22f
+            val settle = 0.10f
+            // Staggered but bounded: a big capture / sweep must not lengthen the input lock much (design max 2.6 s).
+            val gap = if (movers.size > 1) ((maxDur + 0.15f - flight - settle) / (movers.size - 1)).coerceIn(0.02f, 0.08f) else 0f
+            clips += Clip(t, 0.01f, onStart = { onEvent(SceneEvent.Sound(kind, 1f, pan(PitLayout.center(store)))) })
+            var end = t
+            movers.forEachIndexed { i, (sid, from) ->
+                val th = throwOf(from, targets[i], rnd, 0.035f)
+                val launch = t + i * gap + (rnd.nextFloat() - 0.5f) * gap * 0.3f
+                val thud = i < 6 && i % 2 == 0
+                clips += Clip(launch, flight, update = { u -> placeStone(sid, th.at(u), 0f, th.spinAt(u), th.axis) }, onEnd = {
+                    placeStone(sid, th.touch, 0f, th.spin, th.axis)
+                    if (thud) onEvent(SceneEvent.Sound(SoundKind.STORE, 0.95f + rnd.nextFloat() * 0.1f, pan(PitLayout.center(store))))
+                })
+                clips += Clip(launch + flight, settle, update = { v -> placeStone(sid, th.settle(v), 0f, th.rollSpin(v), th.axis) }, onEnd = { placeStone(sid, targets[i]) })
+                end = maxOf(end, launch + flight + settle)
+            }
+            clips += Clip(end, 0.01f, onEnd = { onDone(); report(step) })
+            t = end + 0.05f
+        }
         val cap = r.capture
-        if (cap != null) {
-            val dur = 0.40f * factor
-            val movers = ArrayList<Int>()
-            val starts = ArrayList<P3>()
-            val targets = ArrayList<P3>()
-            val step = ++stepBase
-            clips += Clip(t, dur, onStart = {
-                movers.clear(); starts.clear(); targets.clear()
-                for (cell in listOf(cap.across, cap.landing)) {
-                    for (sid in cellStones[cell]) { movers += sid; starts += stones[sid].pos }
-                    cellStones[cell].clear()
-                }
-                for (sid in movers) { cellStones[cap.store].add(sid); targets += PitLayout.slot(cap.store, cellStones[cap.store].size - 1) + stones[sid].jitter }
-                onEvent(SceneEvent.Sound(SoundKind.CAPTURE, 1f, pan(PitLayout.center(cap.store))))
-            }, update = { u ->
-                val e = Easing.inOut(u)
-                movers.forEachIndexed { i, sid -> placeStone(sid, starts[i].lerp(targets[i], e) + P3(0f, 0.05f * Easing.hump(u), 0f)) }
-            }, onEnd = { glowFlash(cap.store); report(step) })
-            t += dur + 0.05f
-        }
-        for (sw in r.sweeps) {
-            val dur = 0.60f * factor
-            val movers = ArrayList<Int>()
-            val starts = ArrayList<P3>()
-            val targets = ArrayList<P3>()
-            val step = ++stepBase
-            clips += Clip(t, dur, onStart = {
-                movers.clear(); starts.clear(); targets.clear()
-                for ((cell, _) in sw.taken) {
-                    for (sid in cellStones[cell]) { movers += sid; starts += stones[sid].pos }
-                    cellStones[cell].clear()
-                }
-                for (sid in movers) { cellStones[sw.store].add(sid); targets += PitLayout.slot(sw.store, cellStones[sw.store].size - 1) + stones[sid].jitter }
-                onEvent(SceneEvent.Sound(SoundKind.SWEEP, 1f, pan(PitLayout.center(sw.store))))
-            }, update = { u ->
-                movers.forEachIndexed { i, sid ->
-                    val local = ((u * 1.4f) - i * 0.4f / maxOf(1, movers.size)).coerceIn(0f, 1f)
-                    placeStone(sid, starts[i].lerp(targets[i], Easing.inOut(local)) + P3(0f, 0.04f * Easing.hump(local), 0f))
-                }
-            }, onEnd = { report(step) })
-            t += dur + 0.05f
-        }
+        if (cap != null) group(listOf(cap.across, cap.landing), cap.store, SoundKind.CAPTURE, 0.40f, { glowFlash(cap.store) }, ++stepBase)
+        for (sw in r.sweeps) group(sw.taken.map { it.first }, sw.store, SoundKind.SWEEP, 0.60f, {}, ++stepBase)
     }
 
     private fun glowFlash(cell: Int) {
