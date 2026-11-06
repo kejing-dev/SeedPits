@@ -95,4 +95,50 @@ class GameFlowTest {
         assertEquals(null, f.state.value.confirm)
         assertEquals(Phase.IDLE, f.state.value.phase)
     }
+
+    private fun savedGameRepo(): FakeGameRepository {
+        // A saved, unfinished game vs Master after two moves (what a cold start would restore into S02's [继续上一盘]).
+        var p = io.embodit.seedpits.domain.rules.Kalah.initial(Side.SOUTH)
+        val moves = listOf(2, 5)
+        for (m in moves) p = io.embodit.seedpits.domain.rules.Kalah.sow(p, m).after
+        val saved = io.embodit.seedpits.domain.game.SavedGame(GameConfig(Level.MASTER, FirstMover.ME), io.embodit.seedpits.domain.rules.Kalah.initial(Side.SOUTH), moves, 5000L, 0, false, 7L)
+        return FakeGameRepository(io.embodit.seedpits.domain.game.SaveCodec.encode(saved))
+    }
+
+    private fun flowWith(repo: FakeGameRepository): GameFlow {
+        val d = UnconfinedTestDispatcher()
+        val settings = FakeSettingsRepository(Settings(firstRunDone = true))
+        return GameFlow(repo, settings, CoroutineScope(d), d, clock = { 0L })
+    }
+
+    @Test fun savedGameNewGameCancelKeepsTheSave() {
+        val repo = savedGameRepo()
+        val before = repo.text
+        val f = flowWith(repo)
+        f.start()
+        f.toMenu()                                       // S02 with [继续上一盘]
+        assertTrue(f.state.value.saved != null)
+        f.requestNewGame(GameConfig(Level.EASY, FirstMover.ME))
+        assertEquals(Confirm.NEW_GAME, f.state.value.confirm)
+        f.cancelConfirm()
+        assertEquals(null, f.state.value.confirm)
+        assertEquals(null, f.state.value.pendingConfig)
+        assertEquals(before, repo.text)                  // the save is untouched
+        assertEquals(listOf(2, 5), f.state.value.saved!!.moves)
+    }
+
+    @Test fun savedGameNewGameConfirmReplacesTheSave() {
+        val repo = savedGameRepo()
+        val f = flowWith(repo)
+        f.start()
+        f.toMenu()
+        f.requestNewGame(GameConfig(Level.EASY, FirstMover.ME))
+        f.confirmYes()
+        assertEquals(Phase.IDLE, f.state.value.phase)
+        assertEquals(Level.EASY, f.state.value.config.level)
+        assertTrue(f.state.value.moves.isEmpty())
+        val now = io.embodit.seedpits.domain.game.SaveCodec.decode(repo.text)
+        assertTrue(now == null || now.moves.isEmpty())   // the old two-move save is gone
+        assertEquals(null, f.state.value.pendingConfig)
+    }
 }

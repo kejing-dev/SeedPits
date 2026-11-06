@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,22 +51,33 @@ import io.embodit.seedpits.ui.window.WindowCtl
 
 // ---------------------------------------------------------------------------------------------- new game
 
+/**
+ * A flexible gap for pages that must fill the 640 dp window (design layoutRule / mustPass M10, QA #3 q3-1): it takes a
+ * share of the spare height between [min] and [max]; whatever is left after the caps centres the block.
+ */
+@Composable
+private fun ColumnScope.FlexGap(min: androidx.compose.ui.unit.Dp, max: androidx.compose.ui.unit.Dp) =
+    Spacer(Modifier.heightIn(min = min, max = max).weight(1f))
+
 @Composable
 internal fun NewPage(state: GameState, settings: Settings, flow: GameFlow) {
     var level by remember { mutableStateOf(Level.of(settings.lastLevel)) }
     var first by remember { mutableStateOf(FirstMover.ME) }
     val ink = PicoTheme.colorScheme.labelPrimary
     val ink2 = PicoTheme.colorScheme.labelSecondary
-    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 18.dp).verticalScroll(rememberScrollState())) {
-        T(stringResource(R.string.new_title), "new/title", PicoTheme.typography.titleLarge, ink)
-        Gap(10.dp)
+    val confirming = state.confirm == Confirm.NEW_GAME
+    // With the confirmation bar open the gaps shrink so the bar stays on screen without scrolling.
+    val big = if (confirming) 14.dp else 44.dp
+    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 18.dp), verticalArrangement = Arrangement.Center) {
+        T(stringResource(R.string.new_title), "new/title", PicoTheme.typography.headlineSmall, ink)
+        FlexGap(8.dp, big)
         val saved = state.saved
         if (saved != null && state.phase == Phase.SETUP) {
             PrimaryButton(stringResource(R.string.new_continue, levelName(saved.config.level), saved.moves.size), "continue", { flow.continueSaved() }, Modifier.fillMaxWidth(), icon = R.drawable.ic_history)
-            Gap(12.dp)
+            FlexGap(8.dp, big)
         }
-        T(stringResource(R.string.new_who), "new/who", PicoTheme.typography.labelLarge, ink2)
-        Gap(6.dp)
+        T(stringResource(R.string.new_who), "new/who", PicoTheme.typography.titleMedium, ink2)
+        Gap(8.dp)
         Row(Modifier.fillMaxWidth()) {
             SegmentControl(modifier = Modifier.weight(1f)) {
                 Level.entries.forEach { lv ->
@@ -78,11 +90,11 @@ internal fun NewPage(state: GameState, settings: Settings, flow: GameFlow) {
                 }
             }
         }
-        Gap(4.dp)
-        T(stringResource(R.string.new_level_note), "new/note", PicoTheme.typography.bodySmall, ink2, Modifier.fillMaxWidth(), maxLines = 2)
-        Gap(12.dp)
-        T(stringResource(R.string.new_first), "new/first", PicoTheme.typography.labelLarge, ink2)
         Gap(6.dp)
+        T(stringResource(R.string.new_level_note), "new/note", PicoTheme.typography.bodyMediumMultiline, ink2, Modifier.fillMaxWidth(), maxLines = 2)
+        FlexGap(8.dp, big)
+        T(stringResource(R.string.new_first), "new/first", PicoTheme.typography.titleMedium, ink2)
+        Gap(8.dp)
         Row(Modifier.fillMaxWidth()) {
             SegmentControl(modifier = Modifier.weight(1f)) {
                 listOf(FirstMover.ME to R.string.first_me, FirstMover.THEM to R.string.first_them, FirstMover.RANDOM to R.string.first_random).forEach { (f, label) ->
@@ -95,9 +107,9 @@ internal fun NewPage(state: GameState, settings: Settings, flow: GameFlow) {
                 }
             }
         }
-        Gap(16.dp)
-        PrimaryButton(stringResource(R.string.new_start), "start", { flow.requestNewGame(GameConfig(level, first)) }, Modifier.fillMaxWidth(), icon = R.drawable.ic_play)
-        if (state.confirm == Confirm.NEW_GAME) {
+        FlexGap(10.dp, big)
+        PrimaryButton(stringResource(R.string.new_start), "start", { flow.requestNewGame(GameConfig(level, first)) }, Modifier.fillMaxWidth().height(64.dp), icon = R.drawable.ic_play, tall = true)
+        if (confirming) {
             // S02 → S13: a game in progress (or the saved one) would be lost.
             val opp = if (state.inProgress) state.config.level else state.saved?.config?.level ?: state.config.level
             val moves = if (state.inProgress) state.moves.size else state.saved?.moves?.size ?: 0
@@ -108,8 +120,8 @@ internal fun NewPage(state: GameState, settings: Settings, flow: GameFlow) {
                 onYes = { flow.confirmYes() }, onNo = { flow.cancelConfirm() },
             )
         }
-        Gap(10.dp)
-        T(stringResource(R.string.new_streak, settings.streak), "new/streak", PicoTheme.typography.bodySmall, ink2, Modifier.fillMaxWidth(), maxLines = 2)
+        FlexGap(8.dp, if (confirming) 12.dp else 28.dp)
+        T(stringResource(R.string.new_streak, settings.streak), "new/streak", PicoTheme.typography.bodyMediumMultiline, ink2, Modifier.fillMaxWidth(), maxLines = 2)
     }
 }
 
@@ -119,29 +131,32 @@ internal fun NewPage(state: GameState, settings: Settings, flow: GameFlow) {
 internal fun RulesPage(state: GameState, flow: GameFlow) {
     val ink = PicoTheme.colorScheme.labelPrimary
     val ink2 = PicoTheme.colorScheme.labelSecondary
-    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 18.dp)) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            T(stringResource(R.string.rules_title), "rules/title", PicoTheme.typography.titleLarge, ink)
-            Gap(8.dp)
-            RulesDiagram(Modifier.fillMaxWidth().height(96.dp))
-            T(stringResource(R.string.rules_diagram), "rules/diagram", PicoTheme.typography.bodySmall, ink2, Modifier.fillMaxWidth(), maxLines = 2)
-            Gap(8.dp)
-            listOf(R.string.rules_1, R.string.rules_2, R.string.rules_3).forEachIndexed { i, id ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                    T("${i + 1}", "rules/n$i", PicoTheme.typography.titleMedium, ink, Modifier.width(24.dp))
-                    T(stringResource(id), "rules/$i", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.weight(1f), maxLines = 4)
-                }
-            }
-            T(stringResource(R.string.rules_ex1), "rules/ex1", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.fillMaxWidth().padding(vertical = 3.dp), maxLines = 3)
-            T(stringResource(R.string.rules_ex2), "rules/ex2", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.fillMaxWidth().padding(vertical = 3.dp), maxLines = 3)
-            Gap(8.dp)
-            T(stringResource(R.string.mistakes_title), "rules/mistakes", PicoTheme.typography.labelLarge, ink2)
-            listOf(R.string.mistake_1, R.string.mistake_2, R.string.mistake_3, R.string.mistake_4).forEachIndexed { i, id ->
-                T("· " + stringResource(id), "rules/m$i", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.fillMaxWidth().padding(vertical = 2.dp), maxLines = 3)
+    val welcome = state.phase == Phase.WELCOME
+    val big = if (welcome) 14.dp else 30.dp
+    // Everything on one screen, centred; the spare height goes into capped gaps between the groups (QA #3 q3-1).
+    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 18.dp), verticalArrangement = Arrangement.Center) {
+        T(stringResource(R.string.rules_title), "rules/title", PicoTheme.typography.headlineSmall, ink)
+        FlexGap(6.dp, big)
+        RulesDiagram(Modifier.fillMaxWidth().height(96.dp))
+        Gap(4.dp)
+        T(stringResource(R.string.rules_diagram), "rules/diagram", PicoTheme.typography.bodySmall, ink2, Modifier.fillMaxWidth(), maxLines = 2)
+        FlexGap(6.dp, big)
+        listOf(R.string.rules_1, R.string.rules_2, R.string.rules_3).forEachIndexed { i, id ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                T("${i + 1}", "rules/n$i", PicoTheme.typography.titleMedium, ink, Modifier.width(24.dp))
+                T(stringResource(id), "rules/$i", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.weight(1f), maxLines = 4)
             }
         }
-        if (state.phase == Phase.WELCOME) {
-            Gap(10.dp)
+        FlexGap(2.dp, big / 2)
+        T(stringResource(R.string.rules_ex1), "rules/ex1", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.fillMaxWidth().padding(vertical = 3.dp), maxLines = 3)
+        T(stringResource(R.string.rules_ex2), "rules/ex2", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.fillMaxWidth().padding(vertical = 3.dp), maxLines = 3)
+        FlexGap(6.dp, big)
+        T(stringResource(R.string.mistakes_title), "rules/mistakes", PicoTheme.typography.labelLarge, ink2)
+        listOf(R.string.mistake_1, R.string.mistake_2, R.string.mistake_3, R.string.mistake_4).forEachIndexed { i, id ->
+            T("· " + stringResource(id), "rules/m$i", PicoTheme.typography.bodyMediumMultiline, ink, Modifier.fillMaxWidth().padding(vertical = 2.dp), maxLines = 3)
+        }
+        if (welcome) {
+            FlexGap(8.dp, 16.dp)
             PrimaryButton(stringResource(R.string.rules_start), "welcome/start", { flow.welcomeDone() }, Modifier.fillMaxWidth(), icon = R.drawable.ic_play)
         }
     }
@@ -267,4 +282,4 @@ private fun SettingRow(title: String, id: String, hint: String? = null, control:
     }
 }
 
-internal const val VERSION = "0.1.3"
+internal const val VERSION = "0.1.4"
