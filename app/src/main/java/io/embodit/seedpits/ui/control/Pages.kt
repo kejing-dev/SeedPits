@@ -245,7 +245,7 @@ internal fun SettingsPage(state: GameState, settings: Settings, graph: SeedGraph
         Gap(6.dp)
         if (state.confirm == Confirm.EXIT) {
             ConfirmBar(
-                text = stringResource(R.string.exit_title), body = stringResource(R.string.exit_body), yes = stringResource(R.string.exit_yes), id = "confirm/EXIT",
+                text = stringResource(R.string.exit_title), body = stringResource(if (state.inProgress || state.phase == Phase.SETUP && state.saved != null) R.string.exit_body else R.string.exit_body_nogame), yes = stringResource(R.string.exit_yes), id = "confirm/EXIT",
                 onYes = { graph.flow.confirmYes() }, onNo = { graph.flow.cancelConfirm() },
             )
         } else {
@@ -267,4 +267,4 @@ private fun SettingRow(title: String, id: String, hint: String? = null, control:
     }
 }
 
-internal const val VERSION = "0.1.2"
+internal const val VERSION = "0.1.3"

@@ -399,7 +399,7 @@ class GameFlow(
     }
 
     fun requestConfirm(c: Confirm) { set { it.copy(confirm = c, moreOpen = false) }; log("CONFIRM ask $c") }
-    fun cancelConfirm() { set { it.copy(confirm = null) }; log("CONFIRM cancel") }
+    fun cancelConfirm() { set { it.copy(confirm = null, pendingConfig = null) }; log("CONFIRM cancel") }
 
     /** Confirms RESTART / RESIGN; EXIT is carried out by the window (it owns the navigator). */
     fun confirmYes(): Confirm? {
@@ -410,7 +410,7 @@ class GameFlow(
             Confirm.RESIGN -> if (s.phase != Phase.ENDED && s.phase != Phase.SETUP && s.phase != Phase.WELCOME) end(resigned = true)
             Confirm.RESTART -> { cancelJobs(); repo.clear(); set { it.copy(phase = Phase.SETUP, page = Page.NEW, saved = null, result = null, sow = null, previewPit = null) } }
             Confirm.EXIT -> { persist(); onExit() }
-            Confirm.NEW_GAME -> { repo.clear(); startGame(s.pendingConfig ?: s.config) }
+            Confirm.NEW_GAME -> { val cfg = s.pendingConfig ?: s.config; set { it.copy(pendingConfig = null) }; repo.clear(); startGame(cfg) }
         }
         return c
     }

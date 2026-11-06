@@ -137,6 +137,7 @@
     <string name="plate_level">Look straight ahead</string>
     <string name="set_sound_volume">Sound · volume</string>
     <string name="confirm_newgame">Start a new game? You\'ll lose this one.</string>
-    <string name="confirm_newgame_body">You\'re %2$d moves into this game vs %1$s. A new game ends it.</string>
+    <string name="confirm_newgame_body">This game vs %1$s is at move %2$d. A new game ends it.</string>
     <string name="confirm_yes_newgame">New game</string>
+    <string name="exit_body_nogame">Nothing in progress. Next time you start fresh.</string>
 </resources>

@@ -139,4 +139,5 @@
     <string name="confirm_newgame">开新局会丢掉这盘？</string>
     <string name="confirm_newgame_body">对%1$s这盘下到第 %2$d 步了，开新局就没了。</string>
     <string name="confirm_yes_newgame">开新局</string>
+    <string name="exit_body_nogame">现在没有进行中的对局，下次打开从新局开始。</string>
 </resources>
