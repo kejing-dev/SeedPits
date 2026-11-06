@@ -9,9 +9,10 @@ import kotlin.math.abs
 import kotlin.random.Random
 
 /**
- * Event sounds from `assets/sounds/<kind>.wav` (+ `_2`, `_3` variants), through a SoundPool with 4 voices.
- * Drops and store thuds get ±7 % random rate on top of the caller's rate (the pitch rises with the pile) and
- * rotate through their variants without repeating; [pan] places the sound left / right of the board centre.
+ * Event sounds from `assets/sounds/<kind>.wav` (+ `_2`, `_3` variants): Kenney CC0 recordings (chips on felt and
+ * wood for the stones, see build/sound-sources.md), through a SoundPool with 4 voices. Recorded sounds get a random
+ * variant and ±5 % pitch on top of the caller's rate (drops rise a little with the pile); [pan] places the sound
+ * left / right of the board centre.
  */
 class SoundPlayer(context: Context) {
     @Volatile var enabled: Boolean = true
@@ -26,6 +27,7 @@ class SoundPlayer(context: Context) {
     private val random = Random(System.nanoTime())
     private val lastVariant = HashMap<SoundKind, Int>()
     private val lastRate = HashMap<SoundKind, Float>()
+    private var busyUntilMs = 0L
 
     init {
         pool.setOnLoadCompleteListener { _, sampleId, status -> if (status == 0) synchronized(loaded) { loaded += sampleId } }
@@ -43,13 +45,15 @@ class SoundPlayer(context: Context) {
     fun play(kind: SoundKind, rate: Float = 1f, pan: Float = 0f) {
         if (!enabled) return
         val variants = ids[kind] ?: return
-        val varied = kind == SoundKind.DROP || kind == SoundKind.STORE
+        // Every real recording gets a random variant (never the same twice in a row) and ±5 % pitch (profile D51);
+        // the interface cues (again / lose / draw) play as they are.
+        val varied = kind in VARIED
         var r = rate
         var v = 0
         if (varied) {
-            var jitter = 0.93f + random.nextFloat() * 0.14f
+            var jitter = 0.95f + random.nextFloat() * 0.10f
             val prev = lastRate[kind]
-            if (prev != null && abs(jitter - prev) < 0.015f) jitter = if (jitter < 1f) jitter + 0.03f else jitter - 0.03f
+            if (prev != null && abs(jitter - prev) < 0.012f) jitter = if (jitter < 1f) jitter + 0.025f else jitter - 0.025f
             lastRate[kind] = jitter
             r *= jitter
             if (variants.size > 1) {
@@ -61,7 +65,13 @@ class SoundPlayer(context: Context) {
         val id = variants[v]
         if (synchronized(loaded) { id !in loaded }) return
         // Drops, store thuds and the grab overlap (4 voices): a little headroom so the mix stays under -1 dBFS.
-        val vol = gain.coerceIn(0f, 1f) * (BASE[kind] ?: 1f)
+        // A sound that starts while another is still ringing plays at DUCK, so overlapping tails (a stone every
+        // 70–110 ms, a drop under the grab rattle) do not add up past full scale. Same rule and table as
+        // tools/make_sounds.py --loudness, which renders qa/loudness-<version>.wav.
+        val now = android.os.SystemClock.uptimeMillis()
+        val overlap = if (now < busyUntilMs) DUCK else 1f
+        busyUntilMs = maxOf(busyUntilMs, now + (RING[kind] ?: 130L))
+        val vol = gain.coerceIn(0f, 1f) * (BASE[kind] ?: 1f) * overlap
         val left = vol * (1f - pan.coerceIn(-1f, 1f) * 0.5f).coerceAtMost(1f)
         val right = vol * (1f + pan.coerceIn(-1f, 1f) * 0.5f).coerceAtMost(1f)
         pool.play(id, left, right, 1, 0, r.coerceIn(0.5f, 2f))
@@ -72,6 +82,9 @@ class SoundPlayer(context: Context) {
     private companion object {
         const val TAG = "SeedPits"
         /** Same table as tools/make_sounds.py --loudness. */
-        val BASE = mapOf(SoundKind.DROP to 0.72f, SoundKind.STORE to 0.8f, SoundKind.GRAB to 0.72f)
+        const val DUCK = 0.5f
+        val RING = mapOf(SoundKind.GRAB to 600L, SoundKind.CAPTURE to 250L, SoundKind.SWEEP to 350L, SoundKind.WIN to 200L, SoundKind.AGAIN to 250L)
+        val VARIED = setOf(SoundKind.DROP, SoundKind.STORE, SoundKind.GRAB, SoundKind.CAPTURE, SoundKind.SWEEP, SoundKind.ILLEGAL, SoundKind.WIN)
+        val BASE = mapOf(SoundKind.DROP to 1f, SoundKind.STORE to 1f, SoundKind.GRAB to 1f, SoundKind.CAPTURE to 1f, SoundKind.SWEEP to 1f)
     }
 }

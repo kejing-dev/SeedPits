@@ -1,6 +1,7 @@
 """Synthesises the app's event sounds (16-bit mono WAV, 22.05 kHz) in pure Python: stones on wood.
 
-  python3 tools/make_sounds.py           writes app/src/main/assets/sounds/*.wav
+  python3 tools/make_sounds.py --synth   writes the OLD synthesised set (not used since v0.1.5: real CC0 recordings,
+                                         see tools/import_cc0_sounds.py)
   python3 tools/make_sounds.py --check   prints peak and RMS (dBFS) of every file
 
 No ambience, only event sounds (profile B24). Everything is low-passed (nothing much above ~3 kHz).
@@ -19,6 +20,10 @@ import sys
 import wave
 
 RATE = 22050
+DUCK_S = 0.13
+# How long each kind keeps ringing (s), same table as SoundPlayer.RING
+RING = {"grab": 0.6, "capture": 0.25, "sweep": 0.35, "win": 0.2, "again": 0.25}
+DUCK = 0.5
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "src", "main", "assets", "sounds")
 
 
@@ -187,6 +192,9 @@ def resample(x, rate):
 
 
 def loudness(path, seconds=30.0):
+    global RATE
+    with wave.open(os.path.join(OUT, "drop.wav")) as w:
+        RATE = w.getframerate()   # the imported recordings are 44.1 kHz
     """The app's sounds at default volume (Volume.HIGH, gain 1.0, SoundPool volume 1) in the order and timing a
     game plays them: grab, a drop every 110 ms (AI 70 ms), store thuds, extra turn, capture, illegal tap, sweep, win."""
     rnd = random.Random(5)
@@ -194,9 +202,14 @@ def loudness(path, seconds=30.0):
     total = n(seconds)
     mix = [0.0] * total
     # Per-kind play volume, the same table as SoundPlayer.BASE (overlapping drops leave headroom).
-    base = {"drop": 0.72, "store": 0.8, "grab": 0.72}
+    base = {"drop": 1.0, "store": 1.0, "grab": 1.0, "capture": 1.0, "sweep": 1.0}
+    busy = [-1.0]
     def put(name, t, rate=1.0):
-        k = base.get(name.split("_")[0], 1.0)
+        kind = name.split("_")[0]
+        k = base.get(kind, 1.0)
+        if t < busy[0]:
+            k *= DUCK         # same overlap rule as SoundPlayer: starts while another sound is still ringing → DUCK
+        busy[0] = max(busy[0], t + RING.get(kind, DUCK_S))
         s = [v * k for v in resample(bank[name], rate)]
         o = n(t)
         for i, v in enumerate(s):
@@ -242,10 +255,11 @@ def check():
     for f in sorted(os.listdir(OUT)):
         with wave.open(os.path.join(OUT, f)) as w:
             data = w.readframes(w.getnframes())
+            rate = w.getframerate()
         s = struct.unpack("<%dh" % (len(data) // 2), data)
         peak = max(abs(v) for v in s) / 32767
         rms = math.sqrt(sum(v * v for v in s) / len(s)) / 32767
-        print("%-14s %5.2fs peak %6.1f dBFS  rms %6.1f dBFS" % (f, len(s) / RATE, 20 * math.log10(peak), 20 * math.log10(rms)))
+        print("%-14s %5.2fs peak %6.1f dBFS  rms %6.1f dBFS" % (f, len(s) / rate, 20 * math.log10(peak), 20 * math.log10(rms)))
 
 
 if __name__ == "__main__":
@@ -253,6 +267,6 @@ if __name__ == "__main__":
         i = sys.argv.index("--loudness")
         loudness(sys.argv[i + 1], float(sys.argv[i + 2]) if len(sys.argv) > i + 2 else 30.0)
         sys.exit(0)
-    if "--check" not in sys.argv:
-        build()
+    if "--synth" in sys.argv:
+        build()   # the old synthesised set; v0.1.5 ships Kenney CC0 recordings (tools/import_cc0_sounds.py)
     check()
