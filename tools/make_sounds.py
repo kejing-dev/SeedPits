@@ -204,17 +204,19 @@ def loudness(path, seconds=30.0):
     # Per-kind play volume, the same table as SoundPlayer.BASE (overlapping drops leave headroom).
     base = {"drop": 1.0, "store": 1.0, "grab": 1.0, "capture": 1.0, "sweep": 1.0}
     busy = [-1.0]
+    voices = {}   # kind -> [start index, samples]: one instance per kind (SoundPlayer stops the previous stream)
     def put(name, t, rate=1.0):
         kind = name.split("_")[0]
         k = base.get(kind, 1.0)
         if t < busy[0]:
             k *= DUCK         # same overlap rule as SoundPlayer: starts while another sound is still ringing → DUCK
         busy[0] = max(busy[0], t + RING.get(kind, DUCK_S))
-        s = [v * k for v in resample(bank[name], rate)]
         o = n(t)
-        for i, v in enumerate(s):
-            if o + i < total:
-                mix[o + i] += v
+        prev = voices.get(kind)
+        if prev is not None and prev[0] + len(prev[1]) > o:
+            del prev[1][max(0, o - prev[0]):]
+        voices.setdefault("_all", []).append([o, [v * k for v in resample(bank[name], rate)]])
+        voices[kind] = voices["_all"][-1]
     t = 0.3
     move = 0
     while t < seconds - 3:
@@ -242,6 +244,10 @@ def loudness(path, seconds=30.0):
         move += 1
     put("sweep", seconds - 2.8)
     put("win", seconds - 1.9)
+    for o, smp in voices.get("_all", []):
+        for i, v in enumerate(smp):
+            if o + i < total:
+                mix[o + i] += v
     peak = max(abs(v) for v in mix)
     with wave.open(path, "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
@@ -249,6 +255,29 @@ def loudness(path, seconds=30.0):
     active = [v for v in mix]
     print("loudness %s: %.1fs peak %.1f dBFS (%s) rms %.1f dBFS" % (path, seconds, 20 * math.log10(peak), "CLIPS" if peak > 1 else "no clipping", rms_db(active)))
     return peak, rms_db(active)
+
+
+def rapid(path, name="illegal", taps=5, gap=0.12):
+    """Five quick taps of the same event (profile D51 补): one instance per kind, the previous one is cut."""
+    global RATE
+    with wave.open(os.path.join(OUT, name + ".wav")) as w:
+        RATE = w.getframerate()
+    variants = [v for v in (name, name + "_2", name + "_3") if os.path.exists(os.path.join(OUT, v + ".wav"))]
+    bank = [read(v) for v in variants]
+    total = n(gap * taps + 0.8)
+    mix = [0.0] * total
+    starts = [n(0.1 + i * gap) for i in range(taps)]
+    for i, o in enumerate(starts):
+        smp = bank[i % len(bank)]
+        end = starts[i + 1] if i + 1 < taps else total
+        for j, v in enumerate(smp[:end - o]):
+            if o + j < total:
+                mix[o + j] += v
+    peak = max(abs(v) for v in mix)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
+        w.writeframes(b"".join(struct.pack("<h", max(-32767, min(32767, int(v * 32767)))) for v in mix))
+    print("rapid %s x%d every %d ms: peak %.1f dBFS" % (name, taps, gap * 1000, 20 * math.log10(peak)))
 
 
 def check():
@@ -263,6 +292,11 @@ def check():
 
 
 if __name__ == "__main__":
+    if "--rapid" in sys.argv:
+        i = sys.argv.index("--rapid")
+        for kind in ("illegal", "drop", "store", "grab"):
+            rapid(sys.argv[i + 1].replace(".wav", "-%s.wav" % kind) if kind != "illegal" else sys.argv[i + 1], kind)
+        sys.exit(0)
     if "--loudness" in sys.argv:
         i = sys.argv.index("--loudness")
         loudness(sys.argv[i + 1], float(sys.argv[i + 2]) if len(sys.argv) > i + 2 else 30.0)

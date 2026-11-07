@@ -282,4 +282,4 @@ private fun SettingRow(title: String, id: String, hint: String? = null, control:
     }
 }
 
-internal const val VERSION = "0.1.5"
+internal const val VERSION = "0.1.6"

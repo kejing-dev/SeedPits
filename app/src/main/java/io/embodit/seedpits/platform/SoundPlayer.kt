@@ -28,6 +28,7 @@ class SoundPlayer(context: Context) {
     private val lastVariant = HashMap<SoundKind, Int>()
     private val lastRate = HashMap<SoundKind, Float>()
     private var busyUntilMs = 0L
+    private val lastStream = HashMap<SoundKind, Int>()
 
     init {
         pool.setOnLoadCompleteListener { _, sampleId, status -> if (status == 0) synchronized(loaded) { loaded += sampleId } }
@@ -74,7 +75,10 @@ class SoundPlayer(context: Context) {
         val vol = gain.coerceIn(0f, 1f) * (BASE[kind] ?: 1f) * overlap
         val left = vol * (1f - pan.coerceIn(-1f, 1f) * 0.5f).coerceAtMost(1f)
         val right = vol * (1f + pan.coerceIn(-1f, 1f) * 0.5f).coerceAtMost(1f)
-        pool.play(id, left, right, 1, 0, r.coerceIn(0.5f, 2f))
+        // Same event, at most one instance (profile D51 补): stop the previous stream of this kind before the new one,
+        // so repeated taps / picks never stack up into a louder sound.
+        lastStream[kind]?.let { runCatching { pool.stop(it) } }
+        lastStream[kind] = pool.play(id, left, right, 1, 0, r.coerceIn(0.5f, 2f))
     }
 
     fun release() { runCatching { pool.release() } }

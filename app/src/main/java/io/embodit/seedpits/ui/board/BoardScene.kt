@@ -6,6 +6,7 @@ import android.util.Log
 import com.pico.spatial.core.ecs.CollisionComponent
 import com.pico.spatial.core.ecs.DirectionalLightComponent
 import com.pico.spatial.core.ecs.Entity
+import com.pico.spatial.core.ecs.HoverEffectComponent
 import com.pico.spatial.core.ecs.InteractableComponent
 import com.pico.spatial.core.ecs.ModelComponent
 import com.pico.spatial.core.ecs.ModelEntity
@@ -123,6 +124,9 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
         val turnMat: Material,
         val lastMat: Material,
         val digitBlank: Material,
+        val rimMesh: MeshResource,
+        val rimMat: Material,
+        val rimHoverMat: Material,
     )
 
     private var res: Res? = null
@@ -137,6 +141,9 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
     private val cellStones = Array(Kalah.CELLS) { ArrayList<Int>() }
 
     private val litRings = ArrayList<ModelEntity>()
+    private val pitMarks = HashMap<Int, ModelEntity>()
+    private var hoverPit: Int? = null
+    private var hoverUntil = 0f
     private val pathDots = ArrayList<ModelEntity>()
     private var selectRing: ModelEntity? = null
     private var endRing: ModelEntity? = null
@@ -202,6 +209,7 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
             async(Dispatchers.IO) { TextureResource.create(textures.digit("")).keep() },
         )
         val plane = async(Dispatchers.IO) { MeshResource.createPlane(1f, 1f, 0f).keep() }
+        val rim = async(Dispatchers.IO) { MeshResource.createTorus(outerRingRadius = PitLayout.RIM_OUTER, innerRingRadius = PitLayout.RIM_INNER).keep() }
         // gate:allow geometry fallback slab, only drawn when board.glb fails to load
         val slab = async(Dispatchers.IO) { MeshResource.createBox(Vector3(PitLayout.BOARD_W, PitLayout.BOARD_T, PitLayout.BOARD_D), 0.004f).keep() }
         val t = texJobs.awaitAll()
@@ -218,6 +226,11 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
             endMat = markMat(t[4]), captureMat = markMat(t[5]), crossMat = markMat(t[6]), turnMat = markMat(t[7]),
             lastMat = markMat(t[8]),
             digitBlank = UnlitMaterial.create(BlendingMode.OPAQUE).apply { setBaseColor(white); setBaseColorTexture(t[9]); setApplyToneMapping(false) }.keep(),
+            // Pit rim markers (D50 / board-input "visible marker carries the system highlight"): an opaque ring a shade
+            // darker than the walnut, lying flat round each pit mouth.
+            rimMesh = rim.await(),
+            rimMat = PhysicallyBasedMaterial.create(BlendingMode.OPAQUE).apply { setBaseColor(Color4(0.30f, 0.17f, 0.08f, 1f)); setRoughness(0.7f); setMetallic(0f) }.keep(),
+            rimHoverMat = PhysicallyBasedMaterial.create(BlendingMode.OPAQUE).apply { setBaseColor(Color4(0.88f, 0.63f, 0.25f, 1f)); setRoughness(0.6f); setMetallic(0f); setEmissiveColor(Color4(0.25f, 0.16f, 0.05f, 1f)) }.keep(),
         )
     }
 
@@ -287,15 +300,25 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
             components.set(CollisionComponent(collisionShape = listOf(r.boardShape), physicsMaterial = r.physics))
             components.set(InteractableComponent())
         })
-        // Pit colliders: 6.4 cm boxes, 5 cm tall, covering the stones piled in them (D17). Stores are not tap targets.
+        // Pits: a collider parent `pit:<n>` (6.4 cm box covering the pile, D17) with Collision + Interactable + the system
+        // HoverEffect, and under it a visible opaque rim ring `pitMark:<n>` — the system draws its gaze / ray highlight
+        // on that ring (it does not deliver hover to the app; board-input README). Stores are not tap targets.
         for (pit in (0..5) + (7..12)) {
             val c = PitLayout.center(pit)
-            boardRoot.addChild(Entity().apply {
+            val holder = Entity().apply {
                 setName("pit:$pit")
                 transform().setPosition(Vector3(c.x, PitLayout.COLLIDER_CENTER_Y, c.z))
                 components.set(CollisionComponent(collisionShape = listOf(r.pitShape), physicsMaterial = r.physics))
                 components.set(InteractableComponent())
-            })
+                runCatching { components.set(HoverEffectComponent()) }
+            }
+            val ring = ModelEntity(r.rimMesh, r.rimMat).apply {
+                setName("pitMark:$pit")
+                transform().setPosition(Vector3(0f, PitLayout.RIM_Y - PitLayout.COLLIDER_CENTER_Y, 0f))
+            }
+            holder.addChild(ring)
+            pitMarks[pit] = ring
+            boardRoot.addChild(holder)
         }
         // Stones: 12 clones of each of the four greys, colour order shuffled with a fixed seed.
         val rnd = Random(48)
@@ -833,11 +856,27 @@ class BoardScene(private val context: Context, private val onEvent: (SceneEvent)
             if (base != null) g.transform().setScaleVector(Vector3(gx * 1.18f * pulse * pop, gz * 1.12f * pulse * pop, 1f))
         }
         if (cross?.enabled == true && clock >= crossUntil && !s.frozen) cross?.enabled = false
+        if (hoverPit != null && clock > hoverUntil) setHover(null)
         // Lit rings breathe a little in the coach game.
         if (s.coach && !s.reducedMotion) {
             val k = 0.074f * (1f + 0.05f * sin(clock * 4f))
             for (r in litRings) if (r.enabled) r.transform().setScaleVector(Vector3(k, k, 1f))
         }
+    }
+
+    /**
+     * Hover hint from board-input (gaze / ray over a pit). Shared Space does not deliver hover to apps on PICO OS 6.2
+     * (board-input README), so this is a fallback; the system HoverEffect on the rim ring is the main signal.
+     * Hint only: no state change, no sound. Kept 1.5 s, refreshed by the next hover.
+     */
+    fun setHover(pit: Int?) {
+        val r = res ?: return
+        if (pit != hoverPit) {
+            hoverPit?.let { pitMarks[it]?.components?.get(ModelComponent::class.java)?.materials?.set(0, r.rimMat) }
+            pit?.let { pitMarks[it]?.components?.get(ModelComponent::class.java)?.materials?.set(0, r.rimHoverMat) }
+            hoverPit = pit
+        }
+        if (pit != null) hoverUntil = clock + 1.5f
     }
 
     /** Debug: finish the animation in flight now. */

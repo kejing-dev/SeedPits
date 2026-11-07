@@ -36,6 +36,11 @@ object PitLayout {
     const val LAYER = 0.010f
     const val STORE_LAYER = 0.0125f
 
+    /** Rim marker ring round each pit mouth: 3 mm wide band at the rim, 0.8 mm over the board top. */
+    const val RIM_OUTER = 0.0322f
+    const val RIM_INNER = 0.0292f
+    const val RIM_Y = 0.0008f
+
     /** Pit collider: Ø 6.4 cm (as a box), 5.3 cm tall from the bowl bottom to 3.8 cm over the rim (covers the 24-stone pile). */
     const val COLLIDER_W = 0.064f
     const val COLLIDER_H = 0.053f

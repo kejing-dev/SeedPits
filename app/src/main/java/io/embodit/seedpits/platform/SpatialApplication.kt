@@ -10,6 +10,7 @@ class SpatialApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        io.embodit.seedpits.ui.board.input.BoardInputLog.attach(this)
         graph = SeedGraph(this)
         graph.flow.start()
         launch(::mainApp)

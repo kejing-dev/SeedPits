@@ -26,7 +26,10 @@ import com.pico.spatial.core.math.Vector3
 import com.pico.spatial.ui.foundation.content.SpatialView
 import com.pico.spatial.ui.foundation.dsl.registerSystem
 import com.pico.spatial.ui.foundation.dsl.unregisterSystem
-import com.pico.spatial.ui.foundation.gesture.detectSpatialTapGesture
+import com.pico.spatial.ui.geometry.Offset3D
+import io.embodit.seedpits.ui.board.input.BoardInputListener
+import io.embodit.seedpits.ui.board.input.InputSource
+import io.embodit.seedpits.ui.board.input.boardInput
 import com.pico.spatial.ui.platform.containers.LocalSpatialNavigator
 import io.embodit.seedpits.R
 import io.embodit.seedpits.domain.engine.Level
@@ -186,18 +189,18 @@ private fun BoardView(input: BoardInput, graph: SeedGraph, modifier: Modifier) {
     SpatialView(
         modifier = modifier
             .onSizeChanged { viewSize = it }
-            .pointerInput(Unit) {
-                detectSpatialTapGesture(context = context, targetedToEntity = null) { tap ->
-                    val name = tap.targetEntity?.getName()
-                    Log.i(BoardScene.TAG, "TAP target=$name")
-                    val pit = BoardScene.pitOf(name)
-                    when {
-                        pit != null -> graph.flow.tapPit(pit)
-                        name == BoardScene.PLATE_NAME -> if (!WindowCtl.panelOpen) WindowCtl.openWindow("plate")
-                        else -> graph.flow.cancelPreview()
-                    }
+            // board-input template (profile D50): hand ray, eye-hand and controller all arrive here; a press the system
+            // reports as a tiny drag is turned back into a tap; hits on child meshes resolve up to their pit.
+            .boardInput(SeedTargets, object : BoardInputListener<SeedTarget> {
+                override fun onTap(target: SeedTarget?, source: InputSource, position: Offset3D?) {
+                    Log.i(BoardScene.TAG, "TAP target=$target src=${source.label}")
+                    SeedTapDispatcher.dispatch(target, graph.flow, WindowCtl.panelOpen) { WindowCtl.openWindow("plate") }
                 }
-            },
+
+                override fun onHover(target: SeedTarget?, source: InputSource) {
+                    scene.setHover((target as? SeedTarget.Pit)?.cell)
+                }
+            }),
         initial = { content, _ ->
             content.addEntity(scene.root)
             val t0 = android.os.SystemClock.elapsedRealtime()
