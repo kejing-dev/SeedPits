@@ -1,6 +1,10 @@
 package io.embodit.seedpits.ui.control
 
 import android.util.Log
+import androidx.compose.ui.res.stringResource
+import io.embodit.seedpits.R
+import io.embodit.seedpits.domain.engine.Level
+import io.embodit.seedpits.domain.rules.Kalah
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -97,3 +101,18 @@ internal fun Gap(h: Dp = 12.dp) = Spacer(Modifier.height(h))
 
 @Composable
 internal fun HGap(w: Dp = 12.dp) = Spacer(Modifier.width(w))
+
+@Composable
+internal fun levelName(level: Level): String = stringResource(
+    when (level) {
+        Level.EASY -> R.string.level_1
+        Level.CASUAL -> R.string.level_2
+        Level.SMART -> R.string.level_3
+        Level.STRONG -> R.string.level_4
+        Level.MASTER -> R.string.level_5
+    },
+)
+
+@Composable
+internal fun cellName(cell: Int): String = if (Kalah.isStore(cell)) stringResource(R.string.your_store) else Kalah.letter(cell).toString()
+

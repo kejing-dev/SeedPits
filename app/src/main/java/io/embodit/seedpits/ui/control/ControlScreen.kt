@@ -60,7 +60,7 @@ import kotlin.system.exitProcess
 
 /**
  * The control window (Planar 560 × 440 dp, Placement.right of the board): four pages switched by the system
- * TabBar (Play / New game / Rules / Settings, D8). Confirmations open in place (S13). No drag code: the system
+ * TabBar: Play / New game / Rules / Settings, D8; its labels are resolved above with the in-app locale. Confirmations open in place (S13). No drag code: the system
  * window controls under the window move and close it (D21).
  */
 @Composable
@@ -119,20 +119,6 @@ internal fun CenteredPage(content: @Composable androidx.compose.foundation.layou
         )
     }
 }
-
-@Composable
-internal fun levelName(level: Level): String = stringResource(
-    when (level) {
-        Level.EASY -> R.string.level_1
-        Level.CASUAL -> R.string.level_2
-        Level.SMART -> R.string.level_3
-        Level.STRONG -> R.string.level_4
-        Level.MASTER -> R.string.level_5
-    },
-)
-
-@Composable
-private fun cellName(cell: Int): String = if (Kalah.isStore(cell)) stringResource(R.string.your_store) else Kalah.letter(cell).toString()
 
 // ---------------------------------------------------------------------------------------------- play
 
